@@ -1,0 +1,60 @@
+{
+        // See https://go.microsoft.com/fwlink/?LinkId=733558
+        // for the documentation about the tasks.json format
+        "version": "2.0.0",
+        "tasks": [
+                {
+                        "label": "make",
+                        "type": "shell",
+                        "command": "make -j$(nproc)",
+                        "group": {
+                                "kind": "build",
+                                "isDefault": true
+                        },
+                        "problemMatcher": [
+                                "$gcc"
+                        ]
+                },
+                {
+                        "label": "make clean",
+                        "type": "shell",
+                        "command": "make clean",
+                        "group": {
+                                "kind": "build",
+                                "isDefault": true
+                        },
+                        "problemMatcher": [
+                                "$gcc"
+                        ]
+                },
+                {
+                        "label": "Doxygen",
+                        "type": "shell",
+                        "command": "doxygen",
+                        "group": {
+                                "kind": "build",
+                                "isDefault": true
+                        },
+                        "presentation": {
+                                "reveal": "always",
+                                "clear": true,
+                                "panel": "shared"
+                        },
+                        "problemMatcher": {
+                                "owner": "c",
+                                "fileLocation": [
+                                        "relative",
+                                        "${workspaceFolder}/"
+                                ],
+                                "pattern": {
+                                        "regexp": "^.*\/(.+):([0-9]+): ([a-zA-Z]+): (.+)$",
+                                        "file": 1,
+                                        "line": 2,
+                                        //"column": 3,
+                                        "severity": 3,
+                                        "message": 4
+                                }
+                        }
+                }
+        ]
+}
