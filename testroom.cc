@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "answerer/beacon.hh"
 #include "answerer/pyramid.hh"
 
 /* Version */
@@ -38,11 +39,12 @@ static void print_version()
 	printf("Version %d.%d.%d.\n", MAJOR_NUMBER, MINOR_NUMBER, REVISION_NUMBER);
 }
 
-static struct {
+static struct anstable {
 	int label;
 	answerer* ans;
 	const char* detail;
-} anstbl[] = {{1, new pyramid, "pyramid"}, {0, nullptr, nullptr}};
+	~anstable() { delete ans; }
+} anstbl[] = {{1, new pyramid, "pyramid"}, {2, new beacon, "beacon"}, {0, nullptr, nullptr}};
 
 static void print_details(int label)
 {

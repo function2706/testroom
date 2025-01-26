@@ -14,6 +14,8 @@
 class answerer
 {
 public:
+	virtual ~answerer() {}
+
 	virtual int answer(void) = 0;
 };
 
