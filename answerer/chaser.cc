@@ -24,8 +24,6 @@
  */
 class fstring : public std::string
 {
-	const size_t MAX_STRLEN = 4096;
-
 public:
 	fstring() { fget(); }
 
@@ -53,8 +51,6 @@ void fstring::fget()
  */
 class intvector : public std::vector<int>
 {
-	const size_t MAX_STRLEN = 4096;
-
 public:
 	intvector() { fget(); }
 	intvector(const char* str) { get(str); }
@@ -74,7 +70,7 @@ public:
  */
 void intvector::add(const char* str)
 {
-	char dstr[MAX_STRLEN] = {0}, *term, *head;
+	char dstr[4096] = {0}, *term, *head;
 	size_t restlen = strlen(str);
 
 	strcpy(dstr, str);
@@ -119,7 +115,7 @@ void intvector::get(const char* str)
  */
 void intvector::fadd()
 {
-	char str[MAX_STRLEN] = {0};
+	char str[4096] = {0};
 
 	char* cret = fgets(str, sizeof(str), stdin);
 	if (!cret) {
