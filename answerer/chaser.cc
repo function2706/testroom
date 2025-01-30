@@ -13,19 +13,25 @@
 /* =================================== 擬ライブラリ =================================== */
 
 #include <unistd.h>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
 #include <string>
 #include <vector>
 
+#define debuglog(fmt, arg...)                                            \
+	do {                                                             \
+		printf("%s(L.%d) " fmt "\n", __FILE__, __LINE__, ##arg); \
+	} while (0)
+
+#define xxxxxMARKERxxxxx debuglog("through")
+
 /**
  * @brief 標準入力の文字列を扱うクラス
  */
 class fstring : public std::string
 {
-	const size_t MAX_STRLEN = 4096;
-
 public:
 	fstring() { fget(); }
 
@@ -51,13 +57,11 @@ void fstring::fget()
  * @brief 以下のフォーマットに則した文字列から生成される整数配列クラス
  * "[整数] [整数] ... [整数]"
  */
-class intvector : public std::vector<int>
+class vint32 : public std::vector<int32_t>
 {
-	const size_t MAX_STRLEN = 4096;
-
 public:
-	intvector() { fget(); }
-	intvector(const char* str) { get(str); }
+	vint32() { fget(); }
+	vint32(const char* str) { get(str); }
 
 	void add(const char* str);
 	void get(const char* str);
@@ -72,9 +76,9 @@ public:
  *
  * @param str フォーマットに即した文字列
  */
-void intvector::add(const char* str)
+void vint32::add(const char* str)
 {
-	char dstr[MAX_STRLEN] = {0}, *term, *head;
+	char dstr[4096] = {0}, *term, *head;
 	size_t restlen = strlen(str);
 
 	strcpy(dstr, str);
@@ -104,7 +108,7 @@ void intvector::add(const char* str)
  *
  * @param str フォーマットに即した文字列
  */
-void intvector::get(const char* str)
+void vint32::get(const char* str)
 {
 	this->clear();
 	add(str);
@@ -117,9 +121,9 @@ void intvector::get(const char* str)
  *
  * @exception fgets 失敗時に -1
  */
-void intvector::fadd()
+void vint32::fadd()
 {
-	char str[MAX_STRLEN] = {0};
+	char str[4096] = {0};
 
 	char* cret = fgets(str, sizeof(str), stdin);
 	if (!cret) {
@@ -135,7 +139,7 @@ void intvector::fadd()
  *
  * @exception fgets 失敗時に -1
  */
-void intvector::fget()
+void vint32::fget()
 {
 	this->clear();
 	fadd();
@@ -143,144 +147,418 @@ void intvector::fget()
 
 /* =================================== 擬ライブラリ終 =================================== */
 
+/**
+ * @brief オブジェクトID
+ */
 enum class objid : char
 {
-	me = 'A',
-	target = 'B',
 	path = '.',
-	visited = '*',
 	wall = '#',
 };
 
+/**
+ * @brief 座標
+ */
+struct pos {
+	int32_t x_;
+	int32_t y_;
+
+	pos(int32_t x, int32_t y) : x_(x), y_(y) {}
+
+	pos operator+(const pos& p) const { return pos(x_ + p.x_, y_ + p.y_); }
+	bool operator==(const pos& p) const
+	{
+		return (this->x_ == p.x_) && (this->y_ == p.y_);
+	}
+	bool operator!=(const pos& p) const { return !(*this == p); }
+};
+
+using locus = std::vector<pos>; /** 軌跡は座標の vector で記録 */
+using dirbit = uint8_t;
+
+/**
+ * @brief 方角空間
+ * 各 bit が各方角を表す
+ * テーブルは foreach 用
+ */
+namespace dir
+{
+	static uint8_t none = 0x0;
+	static uint8_t east = 0x1;
+	static uint8_t nowth = 0x2;
+	static uint8_t west = 0x4;
+	static uint8_t south = 0x8;
+
+	struct {
+		int idx_;
+		dirbit bit_;
+		pos vector_;
+	} dirtbl[] = {{0, east, {1, 0}},
+		      {1, nowth, {0, -1}},
+		      {2, west, {-1, 0}},
+		      {3, south, {0, 1}},
+		      {-1, none, {0, 0}}};
+
+}  // namespace dir
+
+/**
+ * @brief 地図
+ */
 class map
 {
-	int w_;
-	int h_;
-	char* m_;
+	uint32_t w_;
+	uint32_t h_;
+	objid* m_;
 
-	int me_x_;
-	int me_y_;
+	pos start_;
+	pos target_;
 
 public:
 	map();
-	map(const map& m);
 	~map() { delete[] m_; }
 
-	void init_map();
+	uint32_t width() const { return w_; }
+	uint32_t height() const { return h_; }
 
-	int width() const { return w_; }
-	int height() const { return h_; }
-	int me_x() const { return me_x_; }
-	int me_y() const { return me_y_; }
+	const pos& start() { return start_; }
+	const pos& target() { return target_; }
 
-	char get(int x, int y) const;
-	void set(char id, int x, int y);
-	void set(objid id, int x, int y) { set((char)id, x, y); }
+	objid get(const pos& pos) const;
+	void set(objid id, const pos& pos);
 
-	bool is_match(objid id, int x, int y) const { return get(x, y) == (char)id; }
-
-	int moveme_to(int dx, int dy);
+	bool is_matching_to(objid id, const pos& pos) const { return get(pos) == id; }
 
 	void print() const;
 };
 
-map::map(const map& m) : w_(m.width()), h_(m.height()), me_x_(m.me_x()), me_y_(m.me_y())
+/**
+ * @brief Construct a new map::map object
+ * 標準入力をもとに地図を生成
+ */
+map::map() : w_(0), h_(0), m_(nullptr), start_({0, 0}), target_({0, 0})
 {
-	m_ = new char[w_ * h_];
-	memcpy(m_, m.m_, w_ * h_ * sizeof(char));
-}
-
-map::map() : w_(0), h_(0), m_(nullptr), me_x_(0), me_y_(0)
-{
-	intvector iv;
+	vint32 iv;
 
 	h_ = iv[0];
 	w_ = iv[1];
 
-	m_ = new char[w_ * h_];
+	m_ = new objid[w_ * h_];
 
-	for (int y = 0; y < h_; y++) {
+	for (int32_t y = 0; y < (int32_t)h_; y++) {
 		fstring fstr;
-
-		for (int x = 0; x < w_; x++) {
-			set(fstr[x], x, y);
+		for (int32_t x = 0; x < (int32_t)w_; x++) {
 			if (fstr[x] == 'A') {
-				me_x_ = x;
-				me_y_ = y;
+				start_ = {x, y};
+				set(objid::path, {x, y});
+				continue;
 			}
+			else if (fstr[x] == 'B') {
+				target_ = {x, y};
+				set(objid::path, {x, y});
+				continue;
+			}
+			set((objid)fstr[x], {x, y});
 		}
 	}
 }
 
-char map::get(int x, int y) const
+/**
+ * @brief 指定の座標の値(objid)を取得
+ *
+ * @param pos 座標
+ * @return objid 成功時に objid
+ *
+ * @exception 範囲不適時に例外 -1
+ */
+objid map::get(const pos& pos) const
 {
-	return m_[y * w_ + x];
+	if ((pos.x_ < 0) || (pos.x_ > (int32_t)w_ - 1) || (pos.y_ < 0) ||
+	    (pos.y_ > (int32_t)h_ - 1)) {
+		throw -1;
+	}
+	return m_[pos.y_ * w_ + pos.x_];
 }
 
-void map::set(char id, int x, int y)
+/**
+ * @brief 指定の座標に指定の値(objid)を代入
+ *
+ * @param id
+ * @param pos 座標
+ *
+ * @exception 範囲不適時に例外 -1
+ */
+void map::set(objid id, const pos& pos)
 {
-	m_[y * w_ + x] = id;
+	if ((pos.x_ < 0) || (pos.x_ > (int32_t)w_ - 1) || (pos.y_ < 0) ||
+	    (pos.y_ > (int32_t)h_ - 1)) {
+		throw -1;
+	}
+	m_[pos.y_ * w_ + pos.x_] = id;
 }
 
+/**
+ * @brief 地図を出力
+ */
 void map::print() const
 {
-	for (int y = 0; y < h_; y++) {
-		for (int x = 0; x < w_; x++) {
-			printf("%c", get(x, y));
+	for (int32_t y = 0; y < (int32_t)h_; y++) {
+		for (int32_t x = 0; x < (int32_t)w_; x++) {
+			printf("%c", (char)get({x, y}));
 		}
 		printf("\n");
 	}
 }
 
 /**
- * @brief
- *
- * @param dx
- * @param dy
- * @return int 移動回数, 移動不可時に -1
+ * @brief 分岐情報
  */
-int map::moveme_to(int dx, int dy)
-{
-	int result_x = me_x_ + dx, result_y = me_y_ + dy;
+struct branch {
+	/** 分岐点までの軌跡 */
+	locus locus_;
+	/** 分岐点での次の移動方角 */
+	dirbit nextdirs_;
+	/** ここまでの移動回数 */
+	int32_t movetime_;
 
-	if ((result_x < 0) || (result_x > w_ - 1) || (result_y < 0) || (result_y > h_ - 1)) {
-		return -1;
-	}
-	else if (is_match(objid::visited, result_x, result_y) ||
-		 is_match(objid::wall, result_x, result_y)) {
-		return -1;
-	}
-
-	set(objid::visited, me_x_, me_y_);
-	set(objid::me, result_x, result_y);
-	me_x_ = result_x;
-	me_y_ = result_y;
-	return dx + dy;
-}
+	branch(locus l, dirbit nd, int32_t m) : locus_(l), nextdirs_(nd), movetime_(m) {}
+	~branch() {}
+};
 
 class chaser_meat
 {
-	map origin_map;
-	map marked_map;
+	map map_;
+	std::vector<branch> branches_;
+	int32_t min_movetime_;
+	dirbit accessible_dirbit_;
 
-	int min_move(int goal_x, int goal_y);
+	std::vector<pos> goals_;
+
+	locus& crnt_locus() { return branches_.back().locus_; }
+	dirbit& next_dir() { return branches_.back().nextdirs_; }
+	int32_t& crnt_movetime() { return branches_.back().movetime_; }
+	pos& crnt_pos() { return crnt_locus().back(); }
+
+	void reflesh_accessible_dirbit();
+	bool is_accessible_to(dirbit dir) const;
+	uint8_t get_accesible_dirs() const;
+	void branch_out();
+
+	void reflesh_min_movetime();
+	int32_t move_to(dirbit dir);
+	int32_t move();
+	void min_move_to(const pos& dst);
+
+	void get_goals();
 
 public:
-	chaser_meat() : origin_map(), marked_map(origin_map) {}
+	chaser_meat();
 	~chaser_meat() {}
+
 	void answer();
 };
 
-int chaser_meat::min_move(int goal_x, int goal_y)
+/**
+ * @brief Construct a new chaser meat::chaser meat object
+ */
+chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none) {}
+
+/**
+ * @brief 軌跡の最終地点から移動可能な方角群を更新する
+ */
+void chaser_meat::reflesh_accessible_dirbit()
 {
-	return 0;
+	using namespace dir;
+
+	dirbit resdir = none;
+	auto& crntpos = branches_.empty() ? map_.start() : crnt_pos();
+
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		try {
+			if (!map_.is_matching_to(objid::path, crntpos + dirtbl[i].vector_)) {
+				continue;
+			}
+
+			if (branches_.empty()) {
+				resdir |= dirtbl[i].bit_;
+				continue;
+			}
+
+			bool visited = false;
+			for (auto l = crnt_locus().rbegin(); l != crnt_locus().rend(); l++) {
+				if (*l == crntpos + dirtbl[i].vector_) {
+					visited = true;
+					break;
+				}
+			}
+			if (!visited) {
+				resdir |= dirtbl[i].bit_;
+			}
+		} catch (...) {
+		}
+	}
+	accessible_dirbit_ = resdir;
+}
+
+/**
+ * @brief 軌跡の最終地点から dir 方向へ移動可能か
+ *
+ * @param dir
+ * @return true
+ * @return false
+ */
+bool chaser_meat::is_accessible_to(dirbit dir) const
+{
+	return accessible_dirbit_ & dir;
+}
+
+/**
+ * @brief 軌跡の最終地点から移動可能な方角の数を取得する
+ *
+ * @return uint8_t
+ */
+uint8_t chaser_meat::get_accesible_dirs() const
+{
+	using namespace dir;
+	return !!is_accessible_to(east) + !!is_accessible_to(nowth) +
+	       !!is_accessible_to(west) + !!is_accessible_to(south);
+}
+
+/**
+ * @brief 分岐情報を分岐させる
+ * それまでの軌跡をその瞬間の移動可能な方角の分だけ新たに生成する
+ * 分岐がない場合は移動可能な方角のみ更新する
+ * (i.e. 分岐がある⇔分岐情報が増える)
+ */
+void chaser_meat::branch_out()
+{
+	reflesh_accessible_dirbit();
+
+	using namespace dir;
+	bool is_firstloop = true;
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		try {
+			auto dir = dirtbl[i].bit_;
+			if (!is_accessible_to(dir)) {
+				continue;
+			}
+
+			if (branches_.empty()) {
+				branches_.push_back({locus({map_.start()}), dir, 0});
+				is_firstloop = false;
+			}
+			else if (is_firstloop) {
+				next_dir() = dir;
+				is_firstloop = false;
+			}
+			else {
+				branches_.push_back({crnt_locus(), dir, crnt_movetime()});
+			}
+		} catch (...) {
+		}
+	}
+}
+
+/**
+ * @brief 最小移動回数を更新する
+ */
+void chaser_meat::reflesh_min_movetime()
+{
+	if (min_movetime_ < 0) {
+		min_movetime_ = crnt_movetime();
+	}
+	else {
+		min_movetime_ =
+		    (crnt_movetime() < min_movetime_) ? crnt_movetime() : min_movetime_;
+	}
+}
+
+/**
+ * @brief 可能な方角に 1 だけ移動する
+ * 方角は単方向でなければならない
+ *
+ * @param dir
+ * @return int32_t 移動成功時に 0, 移動できない場合, もしくは不適切方角指定時に -1
+ */
+int32_t chaser_meat::move_to(dirbit dir)
+{
+	using namespace dir;
+
+	if (!is_accessible_to(dir)) {
+		return -1;
+	}
+
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		if (dirtbl[i].bit_ != dir) {
+			continue;
+		}
+		crnt_locus().push_back(crnt_pos() + dirtbl[i].vector_);
+		crnt_movetime()++;
+		return 0;
+	}
+	return -1;
+}
+
+/**
+ * @brief dst までの最小移動回数を得る
+ * (min_movetime_ を更新する)
+ *
+ * @param dst
+ */
+void chaser_meat::min_move_to(const pos& dst)
+{
+	if (crnt_pos() == dst) {
+		reflesh_min_movetime();
+		branches_.pop_back();
+	}
+	else if (get_accesible_dirs() == 0) {
+		branches_.pop_back();
+	}
+	else {
+		move_to(branches_.back().nextdirs_);
+		branch_out();
+	}
+
+	if (!branches_.empty()) {
+		reflesh_accessible_dirbit();
+		min_move_to(dst);
+	}
+}
+
+/**
+ * @brief ゴール(i.e. B から見て四方に突き当たった座標)を得る
+ */
+void chaser_meat::get_goals()
+{
+	using namespace dir;
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		pos crnt_pos = map_.target(), prev_pos = crnt_pos;
+		while (1) {
+			try {
+				if (map_.is_matching_to(objid::wall, crnt_pos)) {
+					break;
+				}
+				prev_pos = crnt_pos;
+				crnt_pos = crnt_pos + dirtbl[i].vector_;
+			} catch (...) {
+				break;
+			}
+		}
+		if (prev_pos != map_.target()) {
+			goals_.push_back(prev_pos);
+		}
+	}
 }
 
 void chaser_meat::answer()
 {
-	marked_map.print();
-	marked_map.moveme_to(1, 0);
-	marked_map.print();
+	using namespace dir;
+
+	get_goals();
+	for (auto& goal : goals_) {
+		branch_out();
+		min_move_to(goal);
+	}
+	printf("%d\n", min_movetime_);
 }
 
 /**
