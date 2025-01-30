@@ -17,6 +17,7 @@
 #include <cstring>
 
 #include "answerer/beacon.hh"
+#include "answerer/chaser.hh"
 #include "answerer/pyramid.hh"
 
 /* Version */
@@ -44,7 +45,10 @@ static struct anstable {
 	answerer* ans;
 	const char* detail;
 	~anstable() { delete ans; }
-} anstbl[] = {{1, new pyramid, "pyramid"}, {2, new beacon, "beacon"}, {0, nullptr, nullptr}};
+} anstbl[] = {{1, new pyramid, "pyramid"},
+	      {2, new beacon, "beacon"},
+	      {3, new chaser, "chaser"},
+	      {0, nullptr, nullptr}};
 
 static void print_details(int label)
 {
