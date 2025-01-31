@@ -162,7 +162,7 @@ public:
 	map(const map& m);
 	~map() { delete[] m_; }
 
-	void init_map();
+	void operator=(const map& m);
 
 	int width() const { return w_; }
 	int height() const { return h_; }
@@ -175,16 +175,10 @@ public:
 
 	bool is_match(objid id, int x, int y) const { return get(x, y) == (char)id; }
 
-	int moveme_to(int dx, int dy);
+	int moveme_with(int dx, int dy);
 
 	void print() const;
 };
-
-map::map(const map& m) : w_(m.width()), h_(m.height()), me_x_(m.me_x()), me_y_(m.me_y())
-{
-	m_ = new char[w_ * h_];
-	memcpy(m_, m.m_, w_ * h_ * sizeof(char));
-}
 
 map::map() : w_(0), h_(0), m_(nullptr), me_x_(0), me_y_(0)
 {
@@ -208,6 +202,22 @@ map::map() : w_(0), h_(0), m_(nullptr), me_x_(0), me_y_(0)
 	}
 }
 
+map::map(const map& m) : w_(m.width()), h_(m.height()), me_x_(m.me_x()), me_y_(m.me_y())
+{
+	m_ = new char[w_ * h_];
+	memcpy(m_, m.m_, w_ * h_ * sizeof(char));
+}
+
+void map::operator=(const map& m)
+{
+	w_ = m.width();
+	h_ = m.height();
+	me_x_ = m.me_x();
+	me_y_ = m.me_y();
+	m_ = new char[w_ * h_];
+	memcpy(m_, m.m_, w_ * h_ * sizeof(char));
+}
+
 char map::get(int x, int y) const
 {
 	return m_[y * w_ + x];
@@ -229,13 +239,14 @@ void map::print() const
 }
 
 /**
- * @brief
+ * @brief me を現在地から (dx, dy) だけ移動させる
+ * 移動前の地点は visited になる
  *
  * @param dx
  * @param dy
  * @return int 移動回数, 移動不可時に -1
  */
-int map::moveme_to(int dx, int dy)
+int map::moveme_with(int dx, int dy)
 {
 	int result_x = me_x_ + dx, result_y = me_y_ + dy;
 
@@ -256,27 +267,78 @@ int map::moveme_to(int dx, int dy)
 
 class chaser_meat
 {
-	map origin_map;
-	map marked_map;
+	map origin_map_;
 
-	int min_move(int goal_x, int goal_y);
+	map marked_map_;
+	int moved_;
+	int min_moved_;
+
+	void min_move_to(int goal_x, int goal_y);
 
 public:
-	chaser_meat() : origin_map(), marked_map(origin_map) {}
+	chaser_meat() : origin_map_(), marked_map_(origin_map_), moved_(0), min_moved_(-1) {}
 	~chaser_meat() {}
+
 	void answer();
 };
 
-int chaser_meat::min_move(int goal_x, int goal_y)
+void chaser_meat::min_move_to(int goal_x, int goal_y)
 {
-	return 0;
+	sleep(1);
+	printf("moved=%d, min=%d\n", moved_, min_moved_);
+	marked_map_.print();
+
+	if (moved_ == 0) {
+		marked_map_ = origin_map_;
+	}
+
+	if ((marked_map_.me_x() == goal_x) && (marked_map_.me_y() == goal_y)) {
+		if (min_moved_ < 0) {
+			min_moved_ = moved_;
+		}
+		else {
+			min_moved_ = (moved_ < min_moved_) ? moved_ : min_moved_;
+		}
+		return;
+	}
+
+	if (marked_map_.moveme_with(1, 0) < 0) {
+		// return;
+	}
+	else {
+		moved_++;
+		min_move_to(goal_x, goal_y);
+	}
+
+	if (marked_map_.moveme_with(-1, 0) < 0) {
+		// return;
+	}
+	else {
+		moved_++;
+		min_move_to(goal_x, goal_y);
+	}
+
+	if (marked_map_.moveme_with(0, 1) < 0) {
+		// return;
+	}
+	else {
+		moved_++;
+		min_move_to(goal_x, goal_y);
+	}
+
+	if (marked_map_.moveme_with(0, -1) < 0) {
+		// return;
+	}
+	else {
+		moved_++;
+		min_move_to(goal_x, goal_y);
+	}
 }
 
 void chaser_meat::answer()
 {
-	marked_map.print();
-	marked_map.moveme_to(1, 0);
-	marked_map.print();
+	min_move_to(4, 2);
+	printf("%d\n", min_moved_);
 }
 
 /**
