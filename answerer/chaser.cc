@@ -228,10 +228,6 @@ public:
 
 	bool is_matching_to(objid id, const pos& pos) const { return get(pos) == id; }
 
-	dirbit get_accesible_dir(const locus& loc) const;
-	uint8_t get_accesible_dirs(const locus& loc) const;
-	bool is_accesible_to(dirbit dir, const locus& loc) const;
-
 	void print() const;
 };
 
@@ -313,70 +309,6 @@ void map::print() const
 	}
 }
 
-/**
- * @brief 軌跡の最終地点から移動可能な方角を取得する
- *
- * @param loc
- * @return dirbit
- */
-dirbit map::get_accesible_dir(const locus& loc) const
-{
-	using namespace dir;
-
-	dirbit resdir = none;
-	auto& crnt = loc.back();
-
-	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		try {
-			if (!is_matching_to(objid::path, crnt + dirtbl[i].vector_)) {
-				continue;
-			}
-
-			bool visited = false;
-			for (auto l = loc.rbegin(); l != loc.rend(); l++) {
-				printf("(%d,%d)\n", l->x_, l->y_);
-				if (*l == crnt + dirtbl[i].vector_) {
-					visited = true;
-					break;
-				}
-			}
-
-			if (!visited) {
-				resdir |= dirtbl[i].bit_;
-			}
-		} catch (...) {
-		}
-	}
-
-	return resdir;
-}
-
-/**
- * @brief 軌跡の最終地点から移動可能な方角の数を取得する
- *
- * @param loc
- * @return uint8_t
- */
-uint8_t map::get_accesible_dirs(const locus& loc) const
-{
-	using namespace dir;
-	return !!is_accesible_to(east, loc) + !!is_accesible_to(nowth, loc) +
-	       !!is_accesible_to(west, loc) + !!is_accesible_to(south, loc);
-}
-
-/**
- * @brief 軌跡の最終地点から dir 方向へ移動可能か
- *
- * @param dir
- * @param loc
- * @return true
- * @return false
- */
-bool map::is_accesible_to(dirbit dir, const locus& loc) const
-{
-	return get_accesible_dir(loc) & dir;
-}
-
 class chaser_meat
 {
 	map map_;
@@ -384,6 +316,12 @@ class chaser_meat
 
 	int32_t movetime_;
 	int32_t min_movetime_;
+
+	dirbit accessible_dirbit_;
+
+	void reflesh_accessible_dirbit();
+	uint8_t get_accesible_dirs() const;
+	bool is_accessible_to(dirbit dir) const;
 
 	void reflesh_min_movetime();
 	int32_t move_to(dirbit dir);
@@ -399,9 +337,68 @@ public:
 /**
  * @brief Construct a new chaser meat::chaser meat object
  */
-chaser_meat::chaser_meat() : map_(), movetime_(0), min_movetime_(-1)
+chaser_meat::chaser_meat()
+    : map_(), movetime_(0), min_movetime_(-1), accessible_dirbit_(dir::none)
 {
 	locus_.push_back(map_.start());
+	reflesh_accessible_dirbit();
+}
+
+/**
+ * @brief 軌跡の最終地点から移動可能な方角群を更新する
+ */
+void chaser_meat::reflesh_accessible_dirbit()
+{
+	using namespace dir;
+
+	dirbit resdir = none;
+	auto& crnt = locus_.back();
+
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		try {
+			if (!map_.is_matching_to(objid::path, crnt + dirtbl[i].vector_)) {
+				continue;
+			}
+
+			bool visited = false;
+			for (auto l = locus_.rbegin(); l != locus_.rend(); l++) {
+				if (*l == crnt + dirtbl[i].vector_) {
+					visited = true;
+					break;
+				}
+			}
+
+			if (!visited) {
+				resdir |= dirtbl[i].bit_;
+			}
+		} catch (...) {
+		}
+	}
+	accessible_dirbit_ = resdir;
+}
+
+/**
+ * @brief 軌跡の最終地点から移動可能な方角の数を取得する
+ *
+ * @return uint8_t
+ */
+uint8_t chaser_meat::get_accesible_dirs() const
+{
+	using namespace dir;
+	return !!is_accessible_to(east) + !!is_accessible_to(nowth) +
+	       !!is_accessible_to(west) + !!is_accessible_to(south);
+}
+
+/**
+ * @brief 軌跡の最終地点から dir 方向へ移動可能か
+ *
+ * @param dir
+ * @return true
+ * @return false
+ */
+bool chaser_meat::is_accessible_to(dirbit dir) const
+{
+	return accessible_dirbit_ & dir;
 }
 
 /**
@@ -428,7 +425,7 @@ int32_t chaser_meat::move_to(dirbit dir)
 {
 	using namespace dir;
 
-	if (!map_.is_accesible_to(dir, locus_)) {
+	if (!is_accessible_to(dir)) {
 		return -1;
 	}
 
@@ -436,6 +433,7 @@ int32_t chaser_meat::move_to(dirbit dir)
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		if (dirtbl[i].bit_ == dir) {
 			locus_.push_back(crnt + dirtbl[i].vector_);
+			reflesh_accessible_dirbit();
 			return 0;
 		}
 	}
@@ -484,23 +482,20 @@ void chaser_meat::answer()
 	map_.print();
 	auto& crnt = locus_.back();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d)\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, map_.is_accesible_to(east, locus_),
-	       map_.is_accesible_to(nowth, locus_), map_.is_accesible_to(west, locus_),
-	       map_.is_accesible_to(south, locus_));
+	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
+	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south));
 
 	int ret = move_to(dir::east);
 	crnt = locus_.back();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, map_.is_accesible_to(east, locus_),
-	       map_.is_accesible_to(nowth, locus_), map_.is_accesible_to(west, locus_),
-	       map_.is_accesible_to(south, locus_), ret);
+	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
+	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
 
 	ret = move_to(dir::south);
 	crnt = locus_.back();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, map_.is_accesible_to(east, locus_),
-	       map_.is_accesible_to(nowth, locus_), map_.is_accesible_to(west, locus_),
-	       map_.is_accesible_to(south, locus_), ret);
+	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
+	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
 
 	// min_move_to(4, 2);
 	// printf("%d\n", min_movetime_);
