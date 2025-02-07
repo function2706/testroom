@@ -309,15 +309,32 @@ void map::print() const
 	}
 }
 
+/**
+ * @brief 分岐情報
+ */
+struct branch {
+	/** 分岐点までの軌跡 */
+	locus locus_;
+	/** 分岐点での移動可能な残りの方角 */
+	dirbit restdirs_;
+
+	branch(locus l, dirbit restdirs) : locus_(l), restdirs_(restdirs) {}
+};
+
 class chaser_meat
 {
 	map map_;
-	locus locus_;
+	std::vector<branch> branches_;
 
 	int32_t movetime_;
 	int32_t min_movetime_;
 
 	dirbit accessible_dirbit_;
+
+	locus& crnt_locus() { return branches_.back().locus_; }
+	dirbit& restdirs() { return branches_.back().restdirs_; }
+	pos& crnt_pos() { return crnt_locus().back(); }
+	void branch_out();
 
 	void reflesh_accessible_dirbit();
 	uint8_t get_accesible_dirs() const;
@@ -340,8 +357,22 @@ public:
 chaser_meat::chaser_meat()
     : map_(), movetime_(0), min_movetime_(-1), accessible_dirbit_(dir::none)
 {
-	locus_.push_back(map_.start());
+	locus epoc;
+	epoc.push_back(map_.start());
+	branches_.push_back({epoc, dir::none});
 	reflesh_accessible_dirbit();
+	restdirs() = accessible_dirbit_;
+}
+
+/**
+ * @brief 分岐情報を分岐させる
+ * それまでの軌跡をその瞬間の移動可能な方角の分だけ新たに生成する
+ */
+void chaser_meat::branch_out()
+{
+	locus loc;
+	loc.push_back(crnt_pos());
+	branches_.push_back({loc, accessible_dirbit_});
 }
 
 /**
@@ -352,17 +383,18 @@ void chaser_meat::reflesh_accessible_dirbit()
 	using namespace dir;
 
 	dirbit resdir = none;
-	auto& crnt = locus_.back();
 
+	auto& crntloc = crnt_locus();
+	auto& crntpos = crnt_pos();
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		try {
-			if (!map_.is_matching_to(objid::path, crnt + dirtbl[i].vector_)) {
+			if (!map_.is_matching_to(objid::path, crntpos + dirtbl[i].vector_)) {
 				continue;
 			}
 
 			bool visited = false;
-			for (auto l = locus_.rbegin(); l != locus_.rend(); l++) {
-				if (*l == crnt + dirtbl[i].vector_) {
+			for (auto l = crntloc.rbegin(); l != crntloc.rend(); l++) {
+				if (*l == crntpos + dirtbl[i].vector_) {
 					visited = true;
 					break;
 				}
@@ -429,11 +461,15 @@ int32_t chaser_meat::move_to(dirbit dir)
 		return -1;
 	}
 
-	auto& crnt = locus_.back();
+	auto& crntloc = crnt_locus();
+	auto& crntpos = crnt_pos();
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		if (dirtbl[i].bit_ == dir) {
-			locus_.push_back(crnt + dirtbl[i].vector_);
+			crntloc.push_back(crntpos + dirtbl[i].vector_);
 			reflesh_accessible_dirbit();
+			if (get_accesible_dirs() >= 2) {
+				branch_out();
+			}
 			return 0;
 		}
 	}
@@ -443,11 +479,10 @@ int32_t chaser_meat::move_to(dirbit dir)
 void chaser_meat::min_move_to(const pos& dst)
 {
 #if 0
-	auto& crnt = locus_.back();
+	auto& crntpos = crnt_pos();
 
 	sleep(1);
-	printf("moved=%d, min=%d, (%d,%d)\n", movetime_, min_movetime_, crnt.x_, crnt.y_);
-	map_.print();
+	printf("move=%d, min=%d, (%d,%d)\n", movetime_, min_movetime_, crnt.x_, crnt.y_);
 
 	if (crnt == map_.goal()) {
 		reflesh_min_movetime();
@@ -480,19 +515,19 @@ void chaser_meat::answer()
 	using namespace dir;
 
 	map_.print();
-	auto& crnt = locus_.back();
+	auto& crnt = crnt_pos();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d)\n", movetime_,
 	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
 	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south));
 
 	int ret = move_to(dir::east);
-	crnt = locus_.back();
+	crnt = crnt_pos();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
 	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
 	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
 
 	ret = move_to(dir::south);
-	crnt = locus_.back();
+	crnt = crnt_pos();
 	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
 	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
 	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
