@@ -315,10 +315,11 @@ void map::print() const
 struct branch {
 	/** 分岐点までの軌跡 */
 	locus locus_;
-	/** 分岐点での移動可能な残りの方角 */
-	dirbit restdirs_;
+	/** 分岐点での次の移動方角 */
+	dirbit nextdirs_;
 
-	branch(locus l, dirbit restdirs) : locus_(l), restdirs_(restdirs) {}
+	branch(locus l, dirbit nd) : locus_(l), nextdirs_(nd) {}
+	~branch() {}
 };
 
 class chaser_meat
@@ -332,16 +333,17 @@ class chaser_meat
 	dirbit accessible_dirbit_;
 
 	locus& crnt_locus() { return branches_.back().locus_; }
-	dirbit& restdirs() { return branches_.back().restdirs_; }
+	dirbit& next_dir() { return branches_.back().nextdirs_; }
 	pos& crnt_pos() { return crnt_locus().back(); }
-	void branch_out();
 
 	void reflesh_accessible_dirbit();
-	uint8_t get_accesible_dirs() const;
 	bool is_accessible_to(dirbit dir) const;
+	uint8_t get_accesible_dirs() const;
+	void branch_out();
 
 	void reflesh_min_movetime();
 	int32_t move_to(dirbit dir);
+	int32_t move();
 	void min_move_to(const pos& dst);
 
 public:
@@ -357,22 +359,8 @@ public:
 chaser_meat::chaser_meat()
     : map_(), movetime_(0), min_movetime_(-1), accessible_dirbit_(dir::none)
 {
-	locus epoc;
-	epoc.push_back(map_.start());
-	branches_.push_back({epoc, dir::none});
 	reflesh_accessible_dirbit();
-	restdirs() = accessible_dirbit_;
-}
-
-/**
- * @brief 分岐情報を分岐させる
- * それまでの軌跡をその瞬間の移動可能な方角の分だけ新たに生成する
- */
-void chaser_meat::branch_out()
-{
-	locus loc;
-	loc.push_back(crnt_pos());
-	branches_.push_back({loc, accessible_dirbit_});
+	branch_out();
 }
 
 /**
@@ -383,17 +371,20 @@ void chaser_meat::reflesh_accessible_dirbit()
 	using namespace dir;
 
 	dirbit resdir = none;
+	auto& crntpos = branches_.empty() ? map_.start() : crnt_pos();
 
-	auto& crntloc = crnt_locus();
-	auto& crntpos = crnt_pos();
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		try {
 			if (!map_.is_matching_to(objid::path, crntpos + dirtbl[i].vector_)) {
 				continue;
 			}
 
+			if (branches_.empty()) {
+				resdir |= dirtbl[i].bit_;
+				continue;
+			}
 			bool visited = false;
-			for (auto l = crntloc.rbegin(); l != crntloc.rend(); l++) {
+			for (auto l = crnt_locus().rbegin(); l != crnt_locus().rend(); l++) {
 				if (*l == crntpos + dirtbl[i].vector_) {
 					visited = true;
 					break;
@@ -410,6 +401,18 @@ void chaser_meat::reflesh_accessible_dirbit()
 }
 
 /**
+ * @brief 軌跡の最終地点から dir 方向へ移動可能か
+ *
+ * @param dir
+ * @return true
+ * @return false
+ */
+bool chaser_meat::is_accessible_to(dirbit dir) const
+{
+	return accessible_dirbit_ & dir;
+}
+
+/**
  * @brief 軌跡の最終地点から移動可能な方角の数を取得する
  *
  * @return uint8_t
@@ -422,15 +425,33 @@ uint8_t chaser_meat::get_accesible_dirs() const
 }
 
 /**
- * @brief 軌跡の最終地点から dir 方向へ移動可能か
- *
- * @param dir
- * @return true
- * @return false
+ * @brief 分岐情報を分岐させる
+ * それまでの軌跡をその瞬間の移動可能な方角の分だけ新たに生成する
+ * 分岐がない場合は移動可能な方角のみ更新する
+ * (i.e. 分岐がある⇔分岐情報が増える)
  */
-bool chaser_meat::is_accessible_to(dirbit dir) const
+void chaser_meat::branch_out()
 {
-	return accessible_dirbit_ & dir;
+	if (!branches_.empty() && (get_accesible_dirs() <= 1)) {
+		next_dir() = accessible_dirbit_;
+		return;
+	}
+
+	using namespace dir;
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		try {
+			auto dir = dirtbl[i].bit_;
+			if (!is_accessible_to(dir)) {
+				continue;
+			}
+
+			if (branches_.empty()) {
+				branches_.push_back({locus({map_.start()}), dir});
+			}
+			branches_.push_back({crnt_locus(), dir});
+		} catch (...) {
+		}
+	}
 }
 
 /**
@@ -447,7 +468,7 @@ void chaser_meat::reflesh_min_movetime()
 }
 
 /**
- * @brief 指定の方角に 1 だけ移動する
+ * @brief 可能な方角に 1 だけ移動する
  * 方角は単方向でなければならない
  *
  * @param dir
@@ -461,79 +482,43 @@ int32_t chaser_meat::move_to(dirbit dir)
 		return -1;
 	}
 
-	auto& crntloc = crnt_locus();
-	auto& crntpos = crnt_pos();
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		if (dirtbl[i].bit_ == dir) {
-			crntloc.push_back(crntpos + dirtbl[i].vector_);
-			reflesh_accessible_dirbit();
-			if (get_accesible_dirs() >= 2) {
-				branch_out();
-			}
-			return 0;
+		if (dirtbl[i].bit_ != dir) {
+			continue;
 		}
+		crnt_locus().push_back(crnt_pos() + dirtbl[i].vector_);
+		movetime_++;
+		return 0;
 	}
 	return -1;
 }
 
 void chaser_meat::min_move_to(const pos& dst)
 {
-#if 0
-	auto& crntpos = crnt_pos();
-
-	sleep(1);
-	printf("move=%d, min=%d, (%d,%d)\n", movetime_, min_movetime_, crnt.x_, crnt.y_);
-
-	if (crnt == map_.goal()) {
+	if (crnt_pos() == dst) {
 		reflesh_min_movetime();
-		locus_.pop_back();
-		return;
+		branches_.pop_back();
+	}
+	else if (get_accesible_dirs() == 0) {
+		branches_.pop_back();
+	}
+	else {
+		move_to(branches_.back().nextdirs_);
+		branch_out();
 	}
 
-	auto branches = map_.get_accesible_dirs(locus_);
-	if (branches == 0) {
-		locus_.pop_back();
-		return;
+	if (!branches_.empty()) {
+		reflesh_accessible_dirbit();
+		min_move_to(dst);
 	}
-	else if (branches == 1) {
-		get_map().moveme_with() min_move_to(goal_x, goal_y);
-	}
-
-	auto accesible_dir_bit = get_map().get_accesible_dir();
-	for (dirbit nextdir = dir::none; nextdir != dir::term; nextdir <<= 1) {
-		if (!(nextdir & accesible_dir_bit)) {
-			continue;
-		}
-		record record(get_map(), nextdir);
-		records_.push_back(record);
-	}
-#endif
 }
 
 void chaser_meat::answer()
 {
 	using namespace dir;
 
-	map_.print();
-	auto& crnt = crnt_pos();
-	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d)\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
-	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south));
-
-	int ret = move_to(dir::east);
-	crnt = crnt_pos();
-	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
-	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
-
-	ret = move_to(dir::south);
-	crnt = crnt_pos();
-	printf("moved=%d, min=%d, crnt=(%d,%d), (ENWS)=(%d,%d,%d,%d), ret=%d\n", movetime_,
-	       min_movetime_, crnt.x_, crnt.y_, is_accessible_to(east),
-	       is_accessible_to(nowth), is_accessible_to(west), is_accessible_to(south), ret);
-
-	// min_move_to(4, 2);
-	// printf("%d\n", min_movetime_);
+	min_move_to({4, 2});
+	printf("%d\n", min_movetime_);
 }
 
 /**
