@@ -211,7 +211,7 @@ class map
 	objid* m_;
 
 	pos start_;
-	pos goal_;
+	pos target_;
 
 public:
 	map();
@@ -221,7 +221,7 @@ public:
 	uint32_t height() const { return h_; }
 
 	const pos& start() { return start_; }
-	const pos& goal() { return goal_; }
+	const pos& target() { return target_; }
 
 	objid get(const pos& pos) const;
 	void set(objid id, const pos& pos);
@@ -235,7 +235,7 @@ public:
  * @brief Construct a new map::map object
  * 標準入力をもとに地図を生成
  */
-map::map() : w_(0), h_(0), m_(nullptr), start_({0, 0}), goal_({0, 0})
+map::map() : w_(0), h_(0), m_(nullptr), start_({0, 0}), target_({0, 0})
 {
 	vint32 iv;
 
@@ -253,7 +253,7 @@ map::map() : w_(0), h_(0), m_(nullptr), start_({0, 0}), goal_({0, 0})
 				continue;
 			}
 			else if (fstr[x] == 'B') {
-				goal_ = {x, y};
+				target_ = {x, y};
 				set(objid::path, {x, y});
 				continue;
 			}
@@ -328,10 +328,10 @@ class chaser_meat
 {
 	map map_;
 	std::vector<branch> branches_;
-
 	int32_t min_movetime_;
-
 	dirbit accessible_dirbit_;
+
+	std::vector<pos> goals_;
 
 	locus& crnt_locus() { return branches_.back().locus_; }
 	dirbit& next_dir() { return branches_.back().nextdirs_; }
@@ -348,6 +348,8 @@ class chaser_meat
 	int32_t move();
 	void min_move_to(const pos& dst);
 
+	void get_goals();
+
 public:
 	chaser_meat();
 	~chaser_meat() {}
@@ -358,10 +360,7 @@ public:
 /**
  * @brief Construct a new chaser meat::chaser meat object
  */
-chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none)
-{
-	branch_out();
-}
+chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none) {}
 
 /**
  * @brief 軌跡の最終地点から移動可能な方角群を更新する
@@ -507,20 +506,12 @@ int32_t chaser_meat::move_to(dirbit dir)
  */
 void chaser_meat::min_move_to(const pos& dst)
 {
-	// sleep(1);
-	// printf("(%d,%d): accesible=%d%d%d%d, move=%d, min=%d, %02ldF\n", crnt_pos().x_,
-	//       crnt_pos().y_, (accessible_dirbit_ & 0x8) >> 3, (accessible_dirbit_ & 0x4) >>
-	//       2, (accessible_dirbit_ & 0x2) >> 1, accessible_dirbit_ & 0x1, crnt_movetime(),
-	//       min_movetime_, branches_.size());
-
 	if (crnt_pos() == dst) {
 		reflesh_min_movetime();
 		branches_.pop_back();
-		// printf("GOAL----------------------------------------\n");
 	}
 	else if (get_accesible_dirs() == 0) {
 		branches_.pop_back();
-		// printf("NOWAY----------------------------------------\n");
 	}
 	else {
 		move_to(branches_.back().nextdirs_);
@@ -533,11 +524,40 @@ void chaser_meat::min_move_to(const pos& dst)
 	}
 }
 
+/**
+ * @brief ゴール(i.e. B から見て四方に突き当たった座標)を得る
+ */
+void chaser_meat::get_goals()
+{
+	using namespace dir;
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		pos crnt_pos = map_.target(), prev_pos = crnt_pos;
+		while (1) {
+			try {
+				if (map_.is_matching_to(objid::wall, crnt_pos)) {
+					break;
+				}
+				prev_pos = crnt_pos;
+				crnt_pos = crnt_pos + dirtbl[i].vector_;
+			} catch (...) {
+				break;
+			}
+		}
+		if (prev_pos != map_.target()) {
+			goals_.push_back(prev_pos);
+		}
+	}
+}
+
 void chaser_meat::answer()
 {
 	using namespace dir;
 
-	min_move_to({4, 2});
+	get_goals();
+	for (auto& goal : goals_) {
+		branch_out();
+		min_move_to(goal);
+	}
 	printf("%d\n", min_movetime_);
 }
 
