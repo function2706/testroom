@@ -360,7 +360,6 @@ public:
  */
 chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none)
 {
-	reflesh_accessible_dirbit();
 	branch_out();
 }
 
@@ -384,6 +383,7 @@ void chaser_meat::reflesh_accessible_dirbit()
 				resdir |= dirtbl[i].bit_;
 				continue;
 			}
+
 			bool visited = false;
 			for (auto l = crnt_locus().rbegin(); l != crnt_locus().rend(); l++) {
 				if (*l == crntpos + dirtbl[i].vector_) {
@@ -391,7 +391,6 @@ void chaser_meat::reflesh_accessible_dirbit()
 					break;
 				}
 			}
-
 			if (!visited) {
 				resdir |= dirtbl[i].bit_;
 			}
@@ -433,12 +432,10 @@ uint8_t chaser_meat::get_accesible_dirs() const
  */
 void chaser_meat::branch_out()
 {
-	if (!branches_.empty() && (get_accesible_dirs() <= 1)) {
-		next_dir() = accessible_dirbit_;
-		return;
-	}
+	reflesh_accessible_dirbit();
 
 	using namespace dir;
+	bool is_firstloop = true;
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		try {
 			auto dir = dirtbl[i].bit_;
@@ -448,9 +445,15 @@ void chaser_meat::branch_out()
 
 			if (branches_.empty()) {
 				branches_.push_back({locus({map_.start()}), dir, 0});
-				continue;
+				is_firstloop = false;
 			}
-			branches_.push_back({crnt_locus(), dir, crnt_movetime()});
+			else if (is_firstloop) {
+				next_dir() = dir;
+				is_firstloop = false;
+			}
+			else {
+				branches_.push_back({crnt_locus(), dir, crnt_movetime()});
+			}
 		} catch (...) {
 		}
 	}
@@ -504,10 +507,11 @@ int32_t chaser_meat::move_to(dirbit dir)
  */
 void chaser_meat::min_move_to(const pos& dst)
 {
+	// sleep(1);
 	// printf("(%d,%d): accesible=%d%d%d%d, move=%d, min=%d, %02ldF\n", crnt_pos().x_,
-	//        crnt_pos().y_, (accessible_dirbit_ & 0x8) >> 3, (accessible_dirbit_ & 0x4) >>
-	//        2, (accessible_dirbit_ & 0x2) >> 1, accessible_dirbit_ & 0x1,
-	//        crnt_movetime(), min_movetime_, branches_.size());
+	//       crnt_pos().y_, (accessible_dirbit_ & 0x8) >> 3, (accessible_dirbit_ & 0x4) >>
+	//       2, (accessible_dirbit_ & 0x2) >> 1, accessible_dirbit_ & 0x1, crnt_movetime(),
+	//       min_movetime_, branches_.size());
 
 	if (crnt_pos() == dst) {
 		reflesh_min_movetime();
