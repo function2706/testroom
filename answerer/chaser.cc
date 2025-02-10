@@ -317,8 +317,10 @@ struct branch {
 	locus locus_;
 	/** 分岐点での次の移動方角 */
 	dirbit nextdirs_;
+	/** ここまでの移動回数 */
+	int32_t movetime_;
 
-	branch(locus l, dirbit nd) : locus_(l), nextdirs_(nd) {}
+	branch(locus l, dirbit nd, int32_t m) : locus_(l), nextdirs_(nd), movetime_(m) {}
 	~branch() {}
 };
 
@@ -327,13 +329,13 @@ class chaser_meat
 	map map_;
 	std::vector<branch> branches_;
 
-	int32_t movetime_;
 	int32_t min_movetime_;
 
 	dirbit accessible_dirbit_;
 
 	locus& crnt_locus() { return branches_.back().locus_; }
 	dirbit& next_dir() { return branches_.back().nextdirs_; }
+	int32_t& crnt_movetime() { return branches_.back().movetime_; }
 	pos& crnt_pos() { return crnt_locus().back(); }
 
 	void reflesh_accessible_dirbit();
@@ -356,8 +358,7 @@ public:
 /**
  * @brief Construct a new chaser meat::chaser meat object
  */
-chaser_meat::chaser_meat()
-    : map_(), movetime_(0), min_movetime_(-1), accessible_dirbit_(dir::none)
+chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none)
 {
 	reflesh_accessible_dirbit();
 	branch_out();
@@ -446,9 +447,10 @@ void chaser_meat::branch_out()
 			}
 
 			if (branches_.empty()) {
-				branches_.push_back({locus({map_.start()}), dir});
+				branches_.push_back({locus({map_.start()}), dir, 0});
+				continue;
 			}
-			branches_.push_back({crnt_locus(), dir});
+			branches_.push_back({crnt_locus(), dir, crnt_movetime()});
 		} catch (...) {
 		}
 	}
@@ -460,10 +462,11 @@ void chaser_meat::branch_out()
 void chaser_meat::reflesh_min_movetime()
 {
 	if (min_movetime_ < 0) {
-		min_movetime_ = movetime_;
+		min_movetime_ = crnt_movetime();
 	}
 	else {
-		min_movetime_ = (movetime_ < min_movetime_) ? movetime_ : min_movetime_;
+		min_movetime_ =
+		    (crnt_movetime() < min_movetime_) ? crnt_movetime() : min_movetime_;
 	}
 }
 
@@ -487,20 +490,33 @@ int32_t chaser_meat::move_to(dirbit dir)
 			continue;
 		}
 		crnt_locus().push_back(crnt_pos() + dirtbl[i].vector_);
-		movetime_++;
+		crnt_movetime()++;
 		return 0;
 	}
 	return -1;
 }
 
+/**
+ * @brief dst までの最小移動回数を得る
+ * (min_movetime_ を更新する)
+ *
+ * @param dst
+ */
 void chaser_meat::min_move_to(const pos& dst)
 {
+	// printf("(%d,%d): accesible=%d%d%d%d, move=%d, min=%d, %02ldF\n", crnt_pos().x_,
+	//        crnt_pos().y_, (accessible_dirbit_ & 0x8) >> 3, (accessible_dirbit_ & 0x4) >>
+	//        2, (accessible_dirbit_ & 0x2) >> 1, accessible_dirbit_ & 0x1,
+	//        crnt_movetime(), min_movetime_, branches_.size());
+
 	if (crnt_pos() == dst) {
 		reflesh_min_movetime();
 		branches_.pop_back();
+		// printf("GOAL----------------------------------------\n");
 	}
 	else if (get_accesible_dirs() == 0) {
 		branches_.pop_back();
+		// printf("NOWAY----------------------------------------\n");
 	}
 	else {
 		move_to(branches_.back().nextdirs_);
