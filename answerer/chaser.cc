@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -148,58 +149,44 @@ void vint32::fget()
 /* =================================== 擬ライブラリ終 =================================== */
 
 /**
- * @brief オブジェクトID
- */
-enum class objid : char
-{
-	path = '.',
-	wall = '#',
-};
-
-/**
  * @brief 座標
  */
-struct pos {
+struct point {
 	int32_t x_;
 	int32_t y_;
 
-	pos(int32_t x, int32_t y) : x_(x), y_(y) {}
+	point() : x_(0), y_(0) {}
+	point(int32_t x, int32_t y) : x_(x), y_(y) {}
 
-	pos operator+(const pos& p) const { return pos(x_ + p.x_, y_ + p.y_); }
-	bool operator==(const pos& p) const
+	point operator+(const point& p) const { return point(x_ + p.x_, y_ + p.y_); }
+	bool operator==(const point& p) const
 	{
 		return (this->x_ == p.x_) && (this->y_ == p.y_);
 	}
-	bool operator!=(const pos& p) const { return !(*this == p); }
+	bool operator!=(const point& p) const { return !(*this == p); }
 };
 
-using locus = std::vector<pos>; /** 軌跡は座標の vector で記録 */
-using dirbit = uint8_t;
+/**
+ * @brief 方向テーブル
+ */
+struct {
+	int idx_;
+	point vector_;
+} dirtbl[] = {{0, {1, 0}}, {1, {0, -1}}, {2, {-1, 0}}, {3, {0, 1}}, {-1, {0, 0}}};
 
 /**
- * @brief 方角空間
- * 各 bit が各方角を表す
- * テーブルは foreach 用
+ * @brief 各点情報
  */
-namespace dir
-{
-	static uint8_t none = 0x0;
-	static uint8_t east = 0x1;
-	static uint8_t nowth = 0x2;
-	static uint8_t west = 0x4;
-	static uint8_t south = 0x8;
+struct site {
+	/** 通行可能か */
+	bool is_path_;
+	/** 訪問済みか */
+	bool is_visited_;
+	/** start からの移動距離 */
+	uint32_t g_cost_;
 
-	struct {
-		int idx_;
-		dirbit bit_;
-		pos vector_;
-	} dirtbl[] = {{0, east, {1, 0}},
-		      {1, nowth, {0, -1}},
-		      {2, west, {-1, 0}},
-		      {3, south, {0, 1}},
-		      {-1, none, {0, 0}}};
-
-}  // namespace dir
+	site() : is_path_(true), is_visited_(false), g_cost_(0xffffffff) {}
+};
 
 /**
  * @brief 地図
@@ -208,25 +195,33 @@ class map
 {
 	uint32_t w_;
 	uint32_t h_;
-	objid* m_;
+	site* sites_;
 
-	pos start_;
-	pos target_;
+	point start_;
+	point target_;
+
+	site& get_site(const point& pos) const;
 
 public:
 	map();
-	~map() { delete[] m_; }
+	~map() { delete[] sites_; }
 
 	uint32_t width() const { return w_; }
 	uint32_t height() const { return h_; }
 
-	const pos& start() { return start_; }
-	const pos& target() { return target_; }
+	const point& start() const { return start_; }
+	const point& target() const { return target_; }
 
-	objid get(const pos& pos) const;
-	void set(objid id, const pos& pos);
+	bool is_accessible(const point& pos) const
+	{
+		return get_site(pos).is_path_ && !get_site(pos).is_visited_;
+	}
+	void set_visited(const point& pos) { get_site(pos).is_visited_ = true; }
+	uint32_t g_cost_of(const point& pos) const { return get_site(pos).g_cost_; }
+	void set_g_cost(const point& pos, uint32_t g) { get_site(pos).g_cost_ = g; }
 
-	bool is_matching_to(objid id, const pos& pos) const { return get(pos) == id; }
+	bool is_new() const;
+	void reset();
 
 	void print() const;
 };
@@ -235,65 +230,77 @@ public:
  * @brief Construct a new map::map object
  * 標準入力をもとに地図を生成
  */
-map::map() : w_(0), h_(0), m_(nullptr), start_({0, 0}), target_({0, 0})
+map::map() : w_(0), h_(0), sites_(nullptr), start_({0, 0}), target_({0, 0})
 {
 	vint32 iv;
 
 	h_ = iv[0];
 	w_ = iv[1];
 
-	m_ = new objid[w_ * h_];
+	sites_ = new site[w_ * h_];
 
 	for (int32_t y = 0; y < (int32_t)h_; y++) {
 		fstring fstr;
 		for (int32_t x = 0; x < (int32_t)w_; x++) {
 			if (fstr[x] == 'A') {
 				start_ = {x, y};
-				set(objid::path, {x, y});
-				continue;
 			}
 			else if (fstr[x] == 'B') {
 				target_ = {x, y};
-				set(objid::path, {x, y});
-				continue;
 			}
-			set((objid)fstr[x], {x, y});
+			else if (fstr[x] == '#') {
+				get_site({x, y}).is_path_ = false;
+			}
 		}
 	}
 }
 
 /**
- * @brief 指定の座標の値(objid)を取得
+ * @brief 指定の座標の site を取得
  *
  * @param pos 座標
- * @return objid 成功時に objid
  *
  * @exception 範囲不適時に例外 -1
  */
-objid map::get(const pos& pos) const
+site& map::get_site(const point& pos) const
 {
 	if ((pos.x_ < 0) || (pos.x_ > (int32_t)w_ - 1) || (pos.y_ < 0) ||
 	    (pos.y_ > (int32_t)h_ - 1)) {
 		throw -1;
 	}
-	return m_[pos.y_ * w_ + pos.x_];
+	return sites_[pos.y_ * w_ + pos.x_];
 }
 
 /**
- * @brief 指定の座標に指定の値(objid)を代入
+ * @brief map が reset された状態か
  *
- * @param id
- * @param pos 座標
- *
- * @exception 範囲不適時に例外 -1
+ * @return true
+ * @return false
  */
-void map::set(objid id, const pos& pos)
+bool map::is_new() const
 {
-	if ((pos.x_ < 0) || (pos.x_ > (int32_t)w_ - 1) || (pos.y_ < 0) ||
-	    (pos.y_ > (int32_t)h_ - 1)) {
-		throw -1;
+	for (int32_t y = 0; y < (int32_t)h_; y++) {
+		for (int32_t x = 0; x < (int32_t)w_; x++) {
+			if ((get_site({x, y}).g_cost_ != 0xffffffff) ||
+			    (get_site({x, y}).is_visited_ != false)) {
+				return false;
+			}
+		}
 	}
-	m_[pos.y_ * w_ + pos.x_] = id;
+	return true;
+}
+
+/**
+ * @brief 訪問済みフラグと記録した g 値を初期化する
+ */
+void map::reset()
+{
+	for (int32_t y = 0; y < (int32_t)h_; y++) {
+		for (int32_t x = 0; x < (int32_t)w_; x++) {
+			sites_[y * w_ + x].g_cost_ = 0xffffffff;
+			sites_[y * w_ + x].is_visited_ = false;
+		}
+	}
 }
 
 /**
@@ -303,238 +310,134 @@ void map::print() const
 {
 	for (int32_t y = 0; y < (int32_t)h_; y++) {
 		for (int32_t x = 0; x < (int32_t)w_; x++) {
-			printf("%c", (char)get({x, y}));
+			if (start_ == (point){x, y}) {
+				printf("A");
+			}
+			else if (target_ == (point){x, y}) {
+				printf("B");
+			}
+			else if (get_site({x, y}).is_visited_) {
+				printf("*");
+			}
+			else if (get_site({x, y}).is_path_) {
+				printf(".");
+			}
+			else {
+				printf("#");
+			}
 		}
 		printf("\n");
 	}
 }
 
 /**
- * @brief 分岐情報
+ * @brief A* ノード
  */
-struct branch {
-	/** 分岐点までの軌跡 */
-	locus locus_;
-	/** 分岐点での次の移動方角 */
-	dirbit nextdirs_;
-	/** ここまでの移動回数 */
-	int32_t movetime_;
-
-	branch(locus l, dirbit nd, int32_t m) : locus_(l), nextdirs_(nd), movetime_(m) {}
-	~branch() {}
+struct a_node {
+	/** 座標 */
+	point point_;
+	/** 予測距離 */
+	uint32_t f_;
 };
+auto greatf = [](a_node& a, a_node& b) { return a.f_ > b.f_; };
 
-class chaser_meat
+/**
+ * @brief A* によって最短経路を計算するクラス
+ */
+class a_star_calculator
 {
 	map map_;
-	std::vector<branch> branches_;
-	int32_t min_movetime_;
-	dirbit accessible_dirbit_;
-
-	std::vector<pos> goals_;
-
-	locus& crnt_locus() { return branches_.back().locus_; }
-	dirbit& next_dir() { return branches_.back().nextdirs_; }
-	int32_t& crnt_movetime() { return branches_.back().movetime_; }
-	pos& crnt_pos() { return crnt_locus().back(); }
-
-	void reflesh_accessible_dirbit();
-	bool is_accessible_to(dirbit dir) const;
-	uint8_t get_accesible_dirs() const;
-	void branch_out();
-
-	void reflesh_min_movetime();
-	int32_t move_to(dirbit dir);
-	int32_t move();
-	void min_move_to(const pos& dst);
-
-	void get_goals();
+	std::priority_queue<a_node, std::vector<a_node>, decltype(greatf)> a_nodes_;
 
 public:
-	chaser_meat();
-	~chaser_meat() {}
+	a_star_calculator() : map_(), a_nodes_(greatf) {}
+	~a_star_calculator() {}
 
-	void answer();
+	int32_t calculate_to(const point& dst);
+	const map& get_map() const { return map_; }
+
+	void reset()
+	{
+		map_.reset();
+		while (!a_nodes_.empty()) {
+			a_nodes_.pop();
+		}
+	}
 };
 
 /**
- * @brief Construct a new chaser meat::chaser meat object
- */
-chaser_meat::chaser_meat() : map_(), min_movetime_(-1), accessible_dirbit_(dir::none) {}
-
-/**
- * @brief 軌跡の最終地点から移動可能な方角群を更新する
- */
-void chaser_meat::reflesh_accessible_dirbit()
-{
-	using namespace dir;
-
-	dirbit resdir = none;
-	auto& crntpos = branches_.empty() ? map_.start() : crnt_pos();
-
-	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		try {
-			if (!map_.is_matching_to(objid::path, crntpos + dirtbl[i].vector_)) {
-				continue;
-			}
-
-			if (branches_.empty()) {
-				resdir |= dirtbl[i].bit_;
-				continue;
-			}
-
-			bool visited = false;
-			for (auto l = crnt_locus().rbegin(); l != crnt_locus().rend(); l++) {
-				if (*l == crntpos + dirtbl[i].vector_) {
-					visited = true;
-					break;
-				}
-			}
-			if (!visited) {
-				resdir |= dirtbl[i].bit_;
-			}
-		} catch (...) {
-		}
-	}
-	accessible_dirbit_ = resdir;
-}
-
-/**
- * @brief 軌跡の最終地点から dir 方向へ移動可能か
+ * @brief ヒューリスティック関数
+ * ここではマンハッタン距離
  *
- * @param dir
- * @return true
- * @return false
+ * @param p1
+ * @param p2
+ * @return uint32_t
  */
-bool chaser_meat::is_accessible_to(dirbit dir) const
+static uint32_t heuristic(const point& p1, const point& p2)
 {
-	return accessible_dirbit_ & dir;
+	return abs(p1.x_ - p2.x_) + abs(p1.y_ - p2.y_);
 }
 
 /**
- * @brief 軌跡の最終地点から移動可能な方角の数を取得する
- *
- * @return uint8_t
- */
-uint8_t chaser_meat::get_accesible_dirs() const
-{
-	using namespace dir;
-	return !!is_accessible_to(east) + !!is_accessible_to(nowth) +
-	       !!is_accessible_to(west) + !!is_accessible_to(south);
-}
-
-/**
- * @brief 分岐情報を分岐させる
- * それまでの軌跡をその瞬間の移動可能な方角の分だけ新たに生成する
- * 分岐がない場合は移動可能な方角のみ更新する
- * (i.e. 分岐がある⇔分岐情報が増える)
- */
-void chaser_meat::branch_out()
-{
-	reflesh_accessible_dirbit();
-
-	using namespace dir;
-	bool is_firstloop = true;
-	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		try {
-			auto dir = dirtbl[i].bit_;
-			if (!is_accessible_to(dir)) {
-				continue;
-			}
-
-			if (branches_.empty()) {
-				branches_.push_back({locus({map_.start()}), dir, 0});
-				is_firstloop = false;
-			}
-			else if (is_firstloop) {
-				next_dir() = dir;
-				is_firstloop = false;
-			}
-			else {
-				branches_.push_back({crnt_locus(), dir, crnt_movetime()});
-			}
-		} catch (...) {
-		}
-	}
-}
-
-/**
- * @brief 最小移動回数を更新する
- */
-void chaser_meat::reflesh_min_movetime()
-{
-	if (min_movetime_ < 0) {
-		min_movetime_ = crnt_movetime();
-	}
-	else {
-		min_movetime_ =
-		    (crnt_movetime() < min_movetime_) ? crnt_movetime() : min_movetime_;
-	}
-}
-
-/**
- * @brief 可能な方角に 1 だけ移動する
- * 方角は単方向でなければならない
- *
- * @param dir
- * @return int32_t 移動成功時に 0, 移動できない場合, もしくは不適切方角指定時に -1
- */
-int32_t chaser_meat::move_to(dirbit dir)
-{
-	using namespace dir;
-
-	if (!is_accessible_to(dir)) {
-		return -1;
-	}
-
-	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		if (dirtbl[i].bit_ != dir) {
-			continue;
-		}
-		crnt_locus().push_back(crnt_pos() + dirtbl[i].vector_);
-		crnt_movetime()++;
-		return 0;
-	}
-	return -1;
-}
-
-/**
- * @brief dst までの最小移動回数を得る
- * (min_movetime_ を更新する)
+ * @brief dst までの最小移動回数を A* で得る
  *
  * @param dst
  */
-void chaser_meat::min_move_to(const pos& dst)
+int32_t a_star_calculator::calculate_to(const point& dst)
 {
-	if (crnt_pos() == dst) {
-		reflesh_min_movetime();
-		branches_.pop_back();
-	}
-	else if (get_accesible_dirs() == 0) {
-		branches_.pop_back();
-	}
-	else {
-		move_to(branches_.back().nextdirs_);
-		branch_out();
+	a_node crnt_node;
+
+	if (a_nodes_.empty()) {
+		if (!map_.is_new()) {
+			/* ゴール不可 */
+			return -1;
+		}
+		/* スタート地点 */
+		uint32_t g = 0;
+		map_.set_g_cost(map_.start(), g);
+		a_nodes_.push({map_.start(), heuristic(map_.start(), dst)});
+		return calculate_to(dst);
 	}
 
-	if (!branches_.empty()) {
-		reflesh_accessible_dirbit();
-		min_move_to(dst);
+	crnt_node = a_nodes_.top();
+	a_nodes_.pop();
+	if (crnt_node.point_ == dst) {
+		/* ゴール */
+		return map_.g_cost_of(crnt_node.point_);
 	}
+
+	map_.set_visited(crnt_node.point_);
+	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
+		try {
+			a_node next_node({crnt_node.point_ + dirtbl[i].vector_, 0});
+			if (!map_.is_accessible(next_node.point_)) {
+				continue;
+			}
+
+			auto pre_g = map_.g_cost_of(crnt_node.point_) + 1;
+			if (pre_g >= map_.g_cost_of(next_node.point_)) {
+				continue;
+			}
+			map_.set_g_cost(next_node.point_, pre_g);
+			next_node.f_ = pre_g + heuristic(next_node.point_, dst);
+			a_nodes_.push(next_node);
+		} catch (...) {
+			continue;
+		}
+	}
+	return calculate_to(dst);
 }
 
 /**
- * @brief ゴール(i.e. B から見て四方に突き当たった座標)を得る
+ * @brief ゴール(i.e. B から見て四方に, 壁に突き当たるまでに座標)を得る
  */
-void chaser_meat::get_goals()
+static void get_goals(const map& map, std::vector<point>& goals)
 {
-	using namespace dir;
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		pos crnt_pos = map_.target(), prev_pos = crnt_pos;
+		point crnt_pos = map.target(), prev_pos = crnt_pos;
 		while (1) {
 			try {
-				if (map_.is_matching_to(objid::wall, crnt_pos)) {
+				if (!map.is_accessible(crnt_pos)) {
 					break;
 				}
 				prev_pos = crnt_pos;
@@ -542,23 +445,12 @@ void chaser_meat::get_goals()
 			} catch (...) {
 				break;
 			}
-		}
-		if (prev_pos != map_.target()) {
-			goals_.push_back(prev_pos);
+
+			if (prev_pos != map.target()) {
+				goals.push_back(prev_pos);
+			}
 		}
 	}
-}
-
-void chaser_meat::answer()
-{
-	using namespace dir;
-
-	get_goals();
-	for (auto& goal : goals_) {
-		branch_out();
-		min_move_to(goal);
-	}
-	printf("%d\n", min_movetime_);
 }
 
 /**
@@ -568,8 +460,17 @@ void chaser_meat::answer()
  */
 int chaser::answer(void)
 try {
-	chaser_meat cm;
-	cm.answer();
+	a_star_calculator a_star;
+	std::vector<point> goals;
+	uint32_t mindist = 0xffffffff;
+
+	get_goals(a_star.get_map(), goals);
+	for (auto& goal : goals) {
+		auto dist = a_star.calculate_to(goal);
+		mindist = ((uint32_t)dist < mindist) ? dist : mindist;
+		a_star.reset();
+	}
+	printf("%d\n", mindist);
 	return 0;
 } catch (...) {
 	return -1;
