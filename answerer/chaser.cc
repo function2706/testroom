@@ -17,6 +17,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <queue>
 #include <string>
 #include <vector>
 
@@ -319,10 +320,10 @@ void map::print() const
 				printf("*");
 			}
 			else if (get_site({x, y}).is_path_) {
-				printf("#");
+				printf(".");
 			}
 			else {
-				printf(".");
+				printf("#");
 			}
 		}
 		printf("\n");
@@ -330,25 +331,38 @@ void map::print() const
 }
 
 /**
+ * @brief A* ノード
+ */
+struct a_node {
+	/** 座標 */
+	point point_;
+	/** 予測距離 */
+	uint32_t f_;
+};
+auto greatf = [](a_node& a, a_node& b) { return a.f_ > b.f_; };
+
+/**
  * @brief A* によって最短経路を計算するクラス
  */
 class a_star_calculator
 {
 	map map_;
-	std::vector<point> a_nodes_;
-
-	void reset()
-	{
-		map_.reset();
-		a_nodes_.clear();
-	}
+	std::priority_queue<a_node, std::vector<a_node>, decltype(greatf)> a_nodes_;
 
 public:
-	a_star_calculator() : map_() {}
+	a_star_calculator() : map_(), a_nodes_(greatf) {}
 	~a_star_calculator() {}
 
 	int32_t calculate_to(const point& dst);
 	const map& get_map() const { return map_; }
+
+	void reset()
+	{
+		map_.reset();
+		while (!a_nodes_.empty()) {
+			a_nodes_.pop();
+		}
+	}
 };
 
 /**
@@ -371,48 +385,47 @@ static uint32_t heuristic(const point& p1, const point& p2)
  */
 int32_t a_star_calculator::calculate_to(const point& dst)
 {
-	int32_t ret = 0;
-	point crnt_node;
+	a_node crnt_node;
 
 	if (a_nodes_.empty()) {
 		if (!map_.is_new()) {
 			/* ゴール不可 */
-			ret = -1;
-			goto end;
+			return -1;
 		}
 		/* スタート地点 */
-		map_.set_g_cost(map_.start(), 0);
-		a_nodes_.push_back(map_.start());
-		calculate_to(dst);
+		uint32_t g = 0;
+		map_.set_g_cost(map_.start(), g);
+		a_nodes_.push({map_.start(), heuristic(map_.start(), dst)});
+		return calculate_to(dst);
 	}
 
-	crnt_node = a_nodes_.back();
-	a_nodes_.pop_back();
-	if (crnt_node == dst) {
+	crnt_node = a_nodes_.top();
+	a_nodes_.pop();
+	if (crnt_node.point_ == dst) {
 		/* ゴール */
-		ret = map_.g_cost_of(crnt_node);
-		goto end;
+		return map_.g_cost_of(crnt_node.point_);
 	}
 
-	map_.set_visited(crnt_node);
+	map_.set_visited(crnt_node.point_);
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
-		point next_node(crnt_node + dirtbl[i].vector_);
-		if (!map_.is_accessible(next_node)) {
-			continue;
-		}
+		try {
+			a_node next_node({crnt_node.point_ + dirtbl[i].vector_, 0});
+			if (!map_.is_accessible(next_node.point_)) {
+				continue;
+			}
 
-		auto pre_g = map_.g_cost_of(crnt_node) + 1;
-		if (pre_g >= map_.g_cost_of(next_node)) {
+			auto pre_g = map_.g_cost_of(crnt_node.point_) + 1;
+			if (pre_g >= map_.g_cost_of(next_node.point_)) {
+				continue;
+			}
+			map_.set_g_cost(next_node.point_, pre_g);
+			next_node.f_ = pre_g + heuristic(next_node.point_, dst);
+			a_nodes_.push(next_node);
+		} catch (...) {
 			continue;
 		}
-		map_.set_g_cost(next_node, pre_g + heuristic(next_node, dst));
-		a_nodes_.push_back(next_node);
 	}
-	calculate_to(dst);
-
-end:
-	reset();
-	return ret;
+	return calculate_to(dst);
 }
 
 /**
@@ -424,7 +437,7 @@ static void get_goals(const map& map, std::vector<point>& goals)
 		point crnt_pos = map.target(), prev_pos = crnt_pos;
 		while (1) {
 			try {
-				if (map.is_accessible(crnt_pos)) {
+				if (!map.is_accessible(crnt_pos)) {
 					break;
 				}
 				prev_pos = crnt_pos;
@@ -454,6 +467,7 @@ try {
 	for (auto& goal : goals) {
 		auto dist = a_star.calculate_to(goal);
 		mindist = ((uint32_t)dist < mindist) ? dist : mindist;
+		a_star.reset();
 	}
 	printf("%d\n", mindist);
 	return 0;
