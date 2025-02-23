@@ -20,6 +20,7 @@
 #include "answerer/chaser.hh"
 #include "answerer/cookie.hh"
 #include "answerer/pyramid.hh"
+#include "answerer/symmetry.hh"
 
 /* Version */
 #define MAJOR_NUMBER 1
@@ -46,11 +47,9 @@ static struct anstable {
 	answerer* ans;
 	const char* detail;
 	~anstable() { delete ans; }
-} anstbl[] = {{1, new pyramid, "pyramid"},
-	      {2, new beacon, "beacon"},
-	      {3, new chaser, "chaser"},
-	      {4, new cookie, "cookie"},
-	      {0, nullptr, nullptr}};
+} anstbl[] = {{1, new pyramid, "pyramid"},   {2, new beacon, "beacon"},
+	      {3, new chaser, "chaser"},     {4, new cookie, "cookie"},
+	      {5, new symmetry, "symmetry"}, {0, nullptr, nullptr}};
 
 static void print_details(int label)
 {
