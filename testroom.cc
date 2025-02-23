@@ -18,6 +18,7 @@
 
 #include "answerer/beacon.hh"
 #include "answerer/chaser.hh"
+#include "answerer/cookie.hh"
 #include "answerer/pyramid.hh"
 
 /* Version */
@@ -48,6 +49,7 @@ static struct anstable {
 } anstbl[] = {{1, new pyramid, "pyramid"},
 	      {2, new beacon, "beacon"},
 	      {3, new chaser, "chaser"},
+	      {4, new cookie, "cookie"},
 	      {0, nullptr, nullptr}};
 
 static void print_details(int label)
