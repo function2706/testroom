@@ -20,6 +20,7 @@
 #include "answerer/chaser.hh"
 #include "answerer/cookie.hh"
 #include "answerer/pyramid.hh"
+#include "answerer/squares.hh"
 #include "answerer/symmetry.hh"
 
 /* Version */
@@ -49,7 +50,8 @@ static struct anstable {
 	~anstable() { delete ans; }
 } anstbl[] = {{1, new pyramid, "pyramid"},   {2, new beacon, "beacon"},
 	      {3, new chaser, "chaser"},     {4, new cookie, "cookie"},
-	      {5, new symmetry, "symmetry"}, {0, nullptr, nullptr}};
+	      {5, new symmetry, "symmetry"}, {6, new squares, "squares"},
+	      {0, nullptr, nullptr}};
 
 static void print_details(int label)
 {
