@@ -57,17 +57,14 @@ public:
 
 map_s::map_s() : size_(0)
 {
-	// vint32 size;
-	vinput vi = {"5", ".....", "...#.", ".....", ".....", "....."};
-	vint32 size(vi.get().c_str());
+	vint32 size;
 
 	size_ = size[0];
 	is_spot_ = new bool[size_ * size_];
 	memset(is_spot_, true, size_ * size_ * sizeof(*is_spot_));
 
 	for (int32_t y = 0; y < (int32_t)size_; y++) {
-		// fstring fstr;
-		auto& fstr = vi.get();
+		fstring fstr;
 		for (int32_t x = 0; x < (int32_t)size_; x++) {
 			if (fstr[x] == '#') {
 				is_spot({x, y}) = false;
@@ -129,7 +126,6 @@ void map_s::print() const
 int squares::answer(void)
 try {
 	map_s m;
-	m.print();
 	printf("%d\n", m.squares());
 	return 0;
 } catch (...) {
