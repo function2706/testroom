@@ -16,6 +16,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <deque>
+#include <initializer_list>
 #include <string>
 #include <vector>
 
@@ -53,4 +55,18 @@ public:
 	void fget();
 };
 
+/**
+ * @brief 初めに入力をまとめて指定し,
+ * get() の度に一行ずつ std::string を引き出すクラス
+ * デバッグ用, 一々入力するのを避けるために使用
+ */
+class vinput
+{
+	std::deque<std::string> strs_;
+
+public:
+	vinput(std::initializer_list<std::string> rows) : strs_(rows) {}
+
+	const std::string& get();
+};
 #endif /* ANSWERER_LIB_HH_ */

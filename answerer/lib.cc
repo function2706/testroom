@@ -34,8 +34,11 @@ void fstring::fget()
  */
 void vint32::add(const char* str)
 {
-	char dstr[4096] = {0}, *term, *head;
+	char *dstr = nullptr, *term, *head;
 	size_t restlen = strlen(str);
+
+	dstr = new char[restlen + 1];
+	memset(dstr, 0, (restlen + 1) * sizeof(char));
 
 	strcpy(dstr, str);
 	head = dstr;
@@ -55,6 +58,7 @@ void vint32::add(const char* str)
 			head = term + 1;
 		}
 	}
+	delete[] dstr;
 }
 
 /**
@@ -99,4 +103,16 @@ void vint32::fget()
 {
 	this->clear();
 	fadd();
+}
+
+/**
+ * @brief Construct a new vinput::vinput object
+ *
+ * @param rows 行ごとの文字列
+ */
+const std::string& vinput::get()
+{
+	auto& ret = strs_.front();
+	strs_.pop_front();
+	return ret;
 }
