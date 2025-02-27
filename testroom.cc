@@ -16,6 +16,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include "answerer/battle.hh"
 #include "answerer/beacon.hh"
 #include "answerer/chaser.hh"
 #include "answerer/cookie.hh"
@@ -51,7 +52,7 @@ static struct anstable {
 } anstbl[] = {{1, new pyramid, "pyramid"},   {2, new beacon, "beacon"},
 	      {3, new chaser, "chaser"},     {4, new cookie, "cookie"},
 	      {5, new symmetry, "symmetry"}, {6, new squares, "squares"},
-	      {0, nullptr, nullptr}};
+	      {7, new battle, "battle"},     {0, nullptr, nullptr}};
 
 static void print_details(int label)
 {
