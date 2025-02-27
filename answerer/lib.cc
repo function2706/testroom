@@ -44,7 +44,7 @@ void vint32::add(const char* str)
 	head = dstr;
 	while (restlen > 0) {
 		term = strchr(head, ' ');
-		if (term != NULL) {
+		if (term != nullptr) {
 			*term = '\0';
 			restlen -= term - head + 1;
 		}
