@@ -11,6 +11,7 @@
 #ifndef ANSWERER_LIB_HH_
 #define ANSWERER_LIB_HH_
 
+#include <sys/time.h>
 #include <unistd.h>
 #include <cstdint>
 #include <cstdio>
@@ -48,11 +49,31 @@ class vint32 : public std::vector<int32_t>
 public:
 	vint32() { fget(); }
 	vint32(const char* str) { get(str); }
+	vint32(const std::string& str) { get(str.c_str()); }
 
 	void add(const char* str);
 	void get(const char* str);
 	void fadd();
 	void fget();
+};
+
+/**
+ * @brief ランダム値生成クラス
+ */
+class randval
+{
+public:
+	randval()
+	{
+		timeval t = {};
+		gettimeofday(&t, nullptr);
+		srandom((unsigned int)t.tv_usec);
+	}
+
+	long get() { return random(); }
+	long get(long max) { return max ? get() % (max + 1) : 0; }
+	long get(long min, long max) { return (max >= min) ? get(max - min) + min : 0; }
+	bool pass(long scale) { return scale ? !(get() % scale) : false; }
 };
 
 /**
@@ -66,7 +87,12 @@ class vinput
 
 public:
 	vinput(std::initializer_list<std::string> rows) : strs_(rows) {}
+	vinput(uint32_t num, uint32_t cols, char delim,
+	       std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs, std::string topstr);
 
-	const std::string& get();
+	const std::string get();
+	void print() const;
 };
+
 #endif /* ANSWERER_LIB_HH_ */
