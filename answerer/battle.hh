@@ -17,6 +17,7 @@ class battle : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "battle"; }
 };
 
 #endif /* ANSWERER_BATTLE_HH_ */

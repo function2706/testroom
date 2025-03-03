@@ -17,6 +17,7 @@ class symmetry : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "symmetry"; }
 };
 
 #endif /* ANSWERER_SYMMETRY_HH_ */

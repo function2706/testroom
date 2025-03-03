@@ -17,6 +17,7 @@ class pyramid : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "pyramid"; }
 };
 
 #endif /* ANSWERER_PYRAMID_HH_ */

@@ -11,12 +11,15 @@
 #ifndef ANSWERER_ANSWERER_HH_
 #define ANSWERER_ANSWERER_HH_
 
+#include <string>
+
 class answerer
 {
 public:
 	virtual ~answerer() {}
 
 	virtual int answer(void) = 0;
+	virtual const std::string name() const = 0;
 };
 
 #endif /* ANSWERER_ANSWERER_HH_ */

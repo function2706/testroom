@@ -17,6 +17,7 @@ class beacon : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "beacon"; }
 };
 
 #endif /* ANSWERER_BEACON_HH_ */

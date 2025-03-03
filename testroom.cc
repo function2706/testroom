@@ -15,6 +15,8 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <list>
+#include <memory>
 
 #include "answerer/battle.hh"
 #include "answerer/beacon.hh"
@@ -30,13 +32,15 @@
 #define MINOR_NUMBER 0
 #define REVISION_NUMBER 0
 
+namespace nsp_testroom
+{
 static void print_usage()
 {
 	printf("Usage\n");
-	printf("-h, --help           : This help message.\n");
-	printf("-v, --version        : Print version.\n");
-	printf("-l, --list           : Print list of libs\n");
-	printf("-a, --answer <q num> : Answer question.\n");
+	printf("-h, --help                 : This help message.\n");
+	printf("-v, --version              : Print version.\n");
+	printf("-l, --list                 : Print list of libs\n");
+	printf("-a, --answer <name or num> : Answer question.\n");
 }
 
 static void print_version()
@@ -46,76 +50,81 @@ static void print_version()
 }
 
 static struct anstable {
-	int label;
-	answerer* ans;
-	const char* detail;
-	~anstable() { delete ans; }
-} anstbl[] = {
-    {1, new pyramid, "pyramid"}, {2, new beacon, "beacon"},	{3, new chaser, "chaser"},
-    {4, new cookie, "cookie"},	 {5, new symmetry, "symmetry"}, {6, new squares, "squares"},
-    {7, new battle, "battle"},	 {8, new donut, "donut"},	{0, nullptr, nullptr}};
-
-static void print_details(int label)
-{
-	int i;
-
-	for (i = 0; anstbl[i].label != 0; i++) {
-		if (anstbl[i].label != label)
-			continue;
-
-		printf("%d.\t%s\n", anstbl[i].label, anstbl[i].detail);
-	}
-}
+	answerer* body;
+	~anstable() { delete body; }
+} anstbl[] = {new pyramid,  new beacon,	 new chaser, new cookie,
+	      new symmetry, new squares, new battle, new donut};
 
 static void print_list()
 {
-	int i;
-
-	for (i = 0; anstbl[i].label != 0; i++) {
-		print_details(anstbl[i].label);
+	int idx = 0;
+	for (auto& ans : anstbl) {
+		printf("%d.\t%s\n", ++idx, ans.body->name().c_str());
 	}
 }
 
-static int answer(int label)
+static int answer(int idx)
 {
-	for (int i = 0; anstbl[i].label != 0; i++) {
-		if (anstbl[i].label != label) {
+	int i = 0;
+	for (auto& ans : anstbl) {
+		if (++i != idx) {
 			continue;
 		}
-
-		return anstbl[i].ans->answer();
+		printf("Run %s...\n", ans.body->name().c_str());
+		int ret = ans.body->answer();
+		printf("Break %s with retval=%d\n", ans.body->name().c_str(), ret);
+		return ret;
 	}
 	return 0;
 }
 
+static int answer(const std::string& name)
+{
+	for (auto& ans : anstbl) {
+		if (ans.body->name() != name) {
+			continue;
+		}
+		printf("Run %s...\n", ans.body->name().c_str());
+		int ret = ans.body->answer();
+		printf("Break %s with retval=%d.\n", ans.body->name().c_str(), ret);
+		return ret;
+	}
+	return 0;
+}
+}  // namespace nsp_testroom
+
 int main(int argc, char** argv)
 {
-	int longindex, opt, ret = -1;
+	using namespace nsp_testroom;
+
+	int longindex, opt, ret = -1, idx = 0;
 	struct option longopt[] = {{"help", no_argument, nullptr, 'h'},
 				   {"version", no_argument, nullptr, 'v'},
 				   {"list", no_argument, nullptr, 'l'},
 				   {"answer", required_argument, nullptr, 'a'},
 				   {nullptr, 0, nullptr, 0}};
+	char* endptr = nullptr;
 
 	while ((opt = getopt_long(argc, argv, "hvla:", longopt, &longindex)) != -1) {
 		switch (opt) {
 		case 'h':
 			print_usage();
 			break;
-
 		case 'v':
 			print_version();
 			break;
-
 		case 'l':
 			print_list();
 			break;
-
 		case 'a':
-			ret = answer(atoi(optarg));
-			printf("ret = %d\n", ret);
-			break;
-
+			idx = strtol(optarg, &endptr, 10);
+			if (*endptr != '\0') {
+				ret = answer(optarg);
+			}
+			else {
+				ret = answer(idx);
+			}
+			return ret;
 		default:
 			print_usage();
 			printf("And...\n");

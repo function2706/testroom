@@ -17,6 +17,7 @@ class donut : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "donut"; }
 };
 
 #endif /* ANSWERER_DONUT_HH_ */

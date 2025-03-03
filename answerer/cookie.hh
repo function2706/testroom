@@ -17,6 +17,7 @@ class cookie : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "cookie"; }
 };
 
 #endif /* ANSWERER_COOKIE_HH_ */

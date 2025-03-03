@@ -17,6 +17,7 @@ class chaser : public answerer
 {
 public:
 	int answer(void) override;
+	virtual const std::string name() const override { return "chaser"; }
 };
 
 #endif /* ANSWERER_CHASER_HH_ */
