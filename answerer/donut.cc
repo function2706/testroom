@@ -11,6 +11,8 @@
 #include "donut.hh"
 #include "lib.hh"
 
+namespace nsp_donut
+{
 struct point {
 	int32_t x_;
 	int32_t y_;
@@ -26,7 +28,7 @@ struct point {
 	bool operator!=(const point& p) const { return !(*this == p); }
 };
 
-class map_d
+class map
 {
 	uint32_t width_;
 	uint32_t height_;
@@ -44,15 +46,15 @@ class map_d
 	bool is_donut_at(const point& lupos) const;
 
 public:
-	map_d();
-	~map_d() { delete[] is_spot_; }
+	map();
+	~map() { delete[] is_spot_; }
 
 	uint32_t donuts() const;
 
 	void print() const;
 };
 
-map_d::map_d() : width_(0)
+map::map() : width_(0)
 {
 	vint32 size;
 
@@ -71,7 +73,7 @@ map_d::map_d() : width_(0)
 	}
 }
 
-bool map_d::is_donut_at(const point& lupos) const
+bool map::is_donut_at(const point& lupos) const
 {
 	return !is_spot(lupos) && !is_spot(lupos + (point){1, 0}) &&
 	       !is_spot(lupos + (point){2, 0}) && !is_spot(lupos + (point){0, 1}) &&
@@ -80,7 +82,7 @@ bool map_d::is_donut_at(const point& lupos) const
 	       !is_spot(lupos + (point){2, 2});
 }
 
-uint32_t map_d::donuts() const
+uint32_t map::donuts() const
 {
 	uint32_t cnt = 0;
 	for (int32_t y = 0; y <= (int32_t)height_ - 3; y++) {
@@ -90,6 +92,7 @@ uint32_t map_d::donuts() const
 	}
 	return cnt;
 }
+}  // namespace nsp_donut
 
 /**
  * @brief main 相当部
@@ -98,7 +101,8 @@ uint32_t map_d::donuts() const
  */
 int donut::answer(void)
 try {
-	map_d m;
+	using namespace nsp_donut;
+	map m;
 	printf("%d\n", m.donuts());
 	return 0;
 } catch (...) {

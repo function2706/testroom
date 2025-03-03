@@ -14,6 +14,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+namespace nsp_beacon
+{
 struct pt {
 	int x;
 	int y;
@@ -46,9 +48,12 @@ static int* getof(const char* str, int idxs)
 
 	return res;
 }
+}  // namespace nsp_beacon
 
 int beacon::answer(void)
 {
+	using namespace nsp_beacon;
+
 	struct pt *bcon = NULL, pos = {0, 0};
 	int *line = NULL, beacons, result = -1;
 	char str[1000] = {0}, *fret = NULL;

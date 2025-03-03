@@ -11,6 +11,8 @@
 #include "cookie.hh"
 #include "lib.hh"
 
+namespace nsp_cookie
+{
 static void set_charbit(uint64_t& bits, char c)
 {
 	uint64_t stand = 0;
@@ -36,6 +38,8 @@ static uint8_t get_bitdensity(uint64_t bits)
 	return num;
 }
 
+}  // namespace nsp_cookie
+
 /**
  * @brief main 相当部
  *
@@ -43,6 +47,8 @@ static uint8_t get_bitdensity(uint64_t bits)
  */
 int cookie::answer(void)
 try {
+	using namespace nsp_cookie;
+
 	vint32 len;
 	fstring fstr;
 	uint64_t bits = 0;

@@ -11,6 +11,8 @@
 #include "squares.hh"
 #include "lib.hh"
 
+namespace nsp_squares
+{
 struct point {
 	int32_t x_;
 	int32_t y_;
@@ -26,7 +28,7 @@ struct point {
 	bool operator!=(const point& p) const { return !(*this == p); }
 };
 
-class map_s
+class map
 {
 	uint32_t size_;
 	bool* is_spot_;
@@ -47,15 +49,15 @@ class map_s
 	uint32_t rd_squares_at(const point& pos) const;
 
 public:
-	map_s();
-	~map_s() { delete[] is_spot_; }
+	map();
+	~map() { delete[] is_spot_; }
 
 	uint32_t squares() const;
 
 	void print() const;
 };
 
-map_s::map_s() : size_(0)
+map::map() : size_(0)
 {
 	vint32 size;
 
@@ -73,7 +75,7 @@ map_s::map_s() : size_(0)
 	}
 }
 
-uint32_t map_s::rd_squares_at(const point& pos) const
+uint32_t map::rd_squares_at(const point& pos) const
 {
 	if (!is_spot(pos)) {
 		return 0;
@@ -89,7 +91,7 @@ uint32_t map_s::rd_squares_at(const point& pos) const
 	return cnt;
 }
 
-uint32_t map_s::squares() const
+uint32_t map::squares() const
 {
 	uint32_t cnt = 0;
 	for (int32_t y = 0; y < (int32_t)size_; y++) {
@@ -103,7 +105,7 @@ uint32_t map_s::squares() const
 /**
  * @brief 地図を出力
  */
-void map_s::print() const
+void map::print() const
 {
 	for (int32_t y = 0; y < (int32_t)size_; y++) {
 		for (int32_t x = 0; x < (int32_t)size_; x++) {
@@ -117,6 +119,7 @@ void map_s::print() const
 		printf("\n");
 	}
 }
+}  // namespace nsp_squares
 
 /**
  * @brief main 相当部
@@ -125,7 +128,8 @@ void map_s::print() const
  */
 int squares::answer(void)
 try {
-	map_s m;
+	using namespace nsp_squares;
+	map m;
 	printf("%d\n", m.squares());
 	return 0;
 } catch (...) {

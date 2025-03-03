@@ -15,6 +15,8 @@
 
 #include <queue>
 
+namespace nsp_chaser
+{
 /**
  * @brief 座標
  */
@@ -319,6 +321,7 @@ static void get_goals(const map& map, std::vector<point>& goals)
 		}
 	}
 }
+}  // namespace nsp_chaser
 
 /**
  * @brief main 相当部
@@ -327,6 +330,7 @@ static void get_goals(const map& map, std::vector<point>& goals)
  */
 int chaser::answer(void)
 try {
+	using namespace nsp_chaser;
 	a_star_calculator a_star;
 	std::vector<point> goals;
 	uint32_t mindist = 0xffffffff;

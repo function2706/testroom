@@ -11,6 +11,8 @@
 #include "symmetry.hh"
 #include "lib.hh"
 
+namespace nsp_symmetry
+{
 static bool is_symmetric_string(const vint32& row)
 {
 	for (size_t i = 0; i < row.size() / 2; i++) {
@@ -20,6 +22,7 @@ static bool is_symmetric_string(const vint32& row)
 	}
 	return true;
 }
+}  // namespace nsp_symmetry
 
 /**
  * @brief main 相当部
@@ -28,6 +31,7 @@ static bool is_symmetric_string(const vint32& row)
  */
 int symmetry::answer(void)
 try {
+	using namespace nsp_symmetry;
 	vint32 size;
 	bool is_symmetry = true;
 	for (int i = 0; i < size[0]; i++) {

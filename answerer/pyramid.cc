@@ -18,6 +18,8 @@
 
 #define MIN(a, b) (a < b) ? a : b
 
+namespace nsp_pyramid
+{
 static int correct_stones(int len_edge, int row, int column)
 {
 	int rad = (len_edge + 1) / 2 - 1;
@@ -25,9 +27,12 @@ static int correct_stones(int len_edge, int row, int column)
 
 	return 1 + ((MIN(dx, dy) > 0) ? MIN(dx, dy) : 0);
 }
+}  // namespace nsp_pyramid
 
 int pyramid::answer(void)
 {
+	using namespace nsp_pyramid;
+
 	int len_edge;
 	int ret = 0;
 	char str[MAX_LEN];
