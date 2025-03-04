@@ -77,9 +77,7 @@ public:
  */
 map::map() : w_(0), h_(0), sites_(nullptr)
 {
-	vinput v(3, 3, ' ', {"1", "2", "3", "4", "5", "6", "7", "8", "9", "10"}, {}, "3 3");
-	// vint32 vi;
-	vint32 vi(v.get());
+	vint32 vi;
 
 	h_ = vi[0];
 	w_ = vi[1];
@@ -87,8 +85,7 @@ map::map() : w_(0), h_(0), sites_(nullptr)
 	sites_ = new site[w_ * h_];
 
 	for (int32_t y = 0; y < (int32_t)h_; y++) {
-		// vint32 vv;
-		vint32 vv(v.get());
+		vint32 vv;
 		for (int32_t x = 0; x < (int32_t)w_; x++) {
 			get_site({x, y}).weight_ = MAX_PT - vv[x];
 		}
@@ -212,7 +209,7 @@ public:
  */
 static uint32_t heuristic(const point& p1, const point& p2)
 {
-	return abs(p1.x_ - p2.x_) + abs(p1.y_ - p2.y_);
+	return abs(p1.y_ - p2.y_);
 }
 
 /**
@@ -225,7 +222,6 @@ int32_t a_star_calculator::calculate()
 	if (a_nodes_.empty()) {
 		if (!map_.is_new()) {
 			/* ゴール不可 */
-			printf("No Goal...\n");
 			return -1;
 		}
 		/* スタート地点 */
@@ -238,22 +234,15 @@ int32_t a_star_calculator::calculate()
 	a_nodes_.pop();
 	if (crnt_node.point_ == goal_) {
 		/* ゴール */
-		printf("Goal with g=%d\n", map_.g_cost_of(crnt_node.point_));
 		return map_.g_cost_of(crnt_node.point_);
 	}
 
 	for (int i = 0; dirtbl[i].idx_ != -1; i++) {
 		try {
 			a_node next_node({crnt_node.point_ + dirtbl[i].vector_, 0});
-			printf("(%d,%d)[%d]->(%d,%d)[%d]", crnt_node.point_.x_,
-			       crnt_node.point_.y_, map_.weight_of(crnt_node.point_),
-			       next_node.point_.x_, next_node.point_.y_,
-			       map_.weight_of(next_node.point_));
 			if (!is_valid(next_node.point_)) {
-				printf("...invalid with (%d,%d)\n", goal_.x_, goal_.y_);
 				continue;
 			}
-			printf("\n");
 
 			auto pre_g = map_.g_cost_of(crnt_node.point_) +
 				     map_.weight_of(next_node.point_);
@@ -262,8 +251,6 @@ int32_t a_star_calculator::calculate()
 			}
 			map_.set_g_cost(next_node.point_, pre_g);
 			next_node.f_ = pre_g + heuristic(next_node.point_, goal_);
-			printf("push next(%d,%d) with g=%d, h=%d\n", next_node.point_.x_,
-			       next_node.point_.y_, pre_g, next_node.f_);
 			a_nodes_.push(next_node);
 		} catch (...) {
 			continue;
@@ -283,25 +270,18 @@ try {
 	using namespace nsp_domino;
 
 	a_star_calculator a_star;
-	a_star.get_map().print();
 	uint32_t mindist = 0xffffffff;
 
 	for (uint32_t start_x = 0; start_x < a_star.get_map().width(); start_x++) {
 		for (uint32_t goal_x = 0; goal_x < a_star.get_map().width(); goal_x++) {
-			printf(
-			    ">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>> "
-			    "start=(%d,0),goal=(%d,%d)\n",
-			    start_x, goal_x, a_star.get_map().height() - 1);
 			a_star.set_edges(
 			    {(int32_t)start_x, 0},
 			    {(int32_t)goal_x, (int32_t)a_star.get_map().height() - 1});
 			auto dist = a_star.calculate();
 			mindist = ((uint32_t)dist < mindist) ? dist : mindist;
 			a_star.reset();
-			printf("crnt min=%d\n", mindist);
 		}
 	}
-
 	printf("%d\n", MAX_PT * a_star.get_map().height() - mindist);
 	return 0;
 } catch (...) {
