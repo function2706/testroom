@@ -22,6 +22,7 @@
 #include "answerer/beacon.hh"
 #include "answerer/chaser.hh"
 #include "answerer/cookie.hh"
+#include "answerer/domino.hh"
 #include "answerer/donut.hh"
 #include "answerer/pyramid.hh"
 #include "answerer/squares.hh"
@@ -52,8 +53,8 @@ static void print_version()
 static struct anstable {
 	answerer* body;
 	~anstable() { delete body; }
-} anstbl[] = {new pyramid,  new beacon,	 new chaser, new cookie,
-	      new symmetry, new squares, new battle, new donut};
+} anstbl[] = {new pyramid, new beacon, new chaser, new cookie, new symmetry,
+	      new squares, new battle, new donut,  new domino};
 
 static void print_list()
 {
@@ -75,6 +76,8 @@ static int answer(int idx)
 		printf("Break %s with retval=%d\n", ans.body->name().c_str(), ret);
 		return ret;
 	}
+	printf("No such question! See below...\n");
+	print_list();
 	return 0;
 }
 
@@ -89,6 +92,8 @@ static int answer(const std::string& name)
 		printf("Break %s with retval=%d.\n", ans.body->name().c_str(), ret);
 		return ret;
 	}
+	printf("No such question! See below...\n");
+	print_list();
 	return 0;
 }
 }  // namespace nsp_testroom
