@@ -53,8 +53,10 @@ static void print_version()
 static struct anstable {
 	answerer* body;
 	~anstable() { delete body; }
-} anstbl[] = {new pyramid, new beacon, new chaser, new cookie, new symmetry,
-	      new squares, new battle, new donut,  new domino};
+} anstbl[] = {
+    new pyramid, new beacon, new chaser, new cookie, new symmetry,
+    new squares, new battle, new donut,	 new domino,
+};
 
 static void print_list()
 {
