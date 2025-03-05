@@ -85,11 +85,22 @@ class vinput
 {
 	std::deque<std::string> strs_;
 
+	void set(uint32_t num, uint32_t cols, char delim,
+		 std::initializer_list<std::string> strs,
+		 std::initializer_list<std::string> fixstrs, std::string topstr);
+
 public:
 	vinput(std::initializer_list<std::string> rows) : strs_(rows) {}
 	vinput(uint32_t num, uint32_t cols, char delim,
 	       std::initializer_list<std::string> strs,
 	       std::initializer_list<std::string> fixstrs, std::string topstr);
+	vinput(uint32_t num, uint32_t cols, std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs, std::string topstr);
+	vinput(uint32_t num, uint32_t cols, char delim,
+	       std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs);
+	vinput(uint32_t num, uint32_t cols, std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs);
 
 	const std::string get();
 	void print() const;

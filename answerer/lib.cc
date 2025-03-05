@@ -107,6 +107,99 @@ void vint32::fget()
 
 /**
  * @brief Construct a new vinput::vinput object
+ * ・cols 列の文字列を num 個, strs に登録されている文字列群でランダムに生成する(LF止め)
+ * ・ただし fixstrs 内の文字列は必ず1回登場する
+ * ・区切り文字は delim, ただし -1 の場合は各列を詰めて生成する
+ * ・初めの文字列は topstr となる
+ *
+ * 例：
+ * (2, 3, ' ', {".", "#"}, {"A", "B"}, "2 3") -> {"2 3\n", ". A #\n", "B . .\n"} など
+ * (1, 5, -1, {"a", "b", "c"}, {}, "5")        -> {"5\n", "bacca\n"} など
+ *
+ * @param num
+ * @param cols
+ * @param delim
+ * @param strs
+ * @param fixstrs
+ * @param topstr
+ */
+vinput::vinput(uint32_t num, uint32_t cols, char delim,
+	       std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs, std::string topstr)
+{
+	set(num, cols, delim, strs, fixstrs, topstr);
+}
+
+/**
+ * @brief Construct a new vinput::vinput object
+ * ・cols 列の文字列を num 個, strs に登録されている文字列群でランダムに生成する(LF止め)
+ * ・ただし fixstrs 内の文字列は必ず1回登場する
+ * ・区切り文字なし
+ * ・初めの文字列は topstr となる
+ *
+ * 例：
+ * (2, 3, {".", "#"}, {"A", "B"}, "2 3") -> {"2 3\n", ".A#\n", "B..\n"} など
+ *
+ * @param num
+ * @param cols
+ * @param strs
+ * @param fixstrs
+ * @param topstr
+ */
+vinput::vinput(uint32_t num, uint32_t cols, std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs, std::string topstr)
+{
+	set(num, cols, -1, strs, fixstrs, topstr);
+}
+
+/**
+ * @brief Construct a new vinput::vinput object
+ * ・cols 列の文字列を num 個, strs に登録されている文字列群でランダムに生成する(LF止め)
+ * ・ただし fixstrs 内の文字列は必ず1回登場する
+ * ・区切り文字は delim, ただし -1 の場合は各列を詰めて生成する
+ * ・初めの文字列は "num cols" となる
+ *
+ * 例：
+ * (2, 3, ' ', {".", "#"}, {"A", "B"}) -> {"2 3\n", ". A #\n", "B . .\n"} など
+ *
+ * @param num
+ * @param cols
+ * @param delim
+ * @param strs
+ * @param fixstrs
+ */
+vinput::vinput(uint32_t num, uint32_t cols, char delim,
+	       std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs)
+{
+	std::string topstr = std::to_string(num) + " " + std::to_string(cols);
+	set(num, cols, delim, strs, fixstrs, topstr);
+}
+
+/**
+ * @brief Construct a new vinput::vinput object
+ * ・cols 列の文字列を num 個, strs に登録されている文字列群でランダムに生成する(LF止め)
+ * ・ただし fixstrs 内の文字列は必ず1回登場する
+ * ・区切り文字なし
+ * ・初めの文字列は "num cols" となる
+ *
+ * 例：
+ * (2, 3, {".", "#"}, {"A", "B"}) -> {"2 3\n", ".A#\n", "B..\n"} など
+ *
+ * @param num
+ * @param cols
+ * @param strs
+ * @param fixstrs
+ */
+vinput::vinput(uint32_t num, uint32_t cols, std::initializer_list<std::string> strs,
+	       std::initializer_list<std::string> fixstrs)
+{
+	std::string topstr = std::to_string(num) + " " + std::to_string(cols);
+	set(num, cols, -1, strs, fixstrs, topstr);
+}
+
+/**
+ * @brief Construct a new vinput::vinput object
  * ・cols 列(区切り文字は delim)の文字列を num 個,
  *   strs に登録されている文字列群でランダムに生成する(LF止め)
  * ・ただし fixstrs 内の文字列は必ず1回登場する
@@ -124,82 +217,80 @@ void vint32::fget()
  * @param fixstrs
  * @param topstr
  */
-vinput::vinput(uint32_t num, uint32_t cols, char delim,
-	       std::initializer_list<std::string> strs,
-	       std::initializer_list<std::string> fixstrs, std::string topstr)
+void vinput::set(uint32_t num, uint32_t cols, char delim,
+		 std::initializer_list<std::string> strs,
+		 std::initializer_list<std::string> fixstrs, std::string topstr)
 {
 	randval rand;
 	std::vector<std::string> q_strs(strs);
 	std::vector<std::string> q_fixstrs(fixstrs);
-	struct str_element {
-		std::string str_;
-		bool is_realstr_;
+	struct fixstr_pos {
+		uint32_t row_;
+		uint32_t col_;
+		std::string c_;
 
-		str_element(const std::string& str, bool is_realstr)
-		    : str_(str), is_realstr_(is_realstr)
+		fixstr_pos(randval& r, uint32_t num, uint32_t cols, const std::string& fstr)
+		    : c_(fstr)
 		{
+			reflesh(r, num, cols);
 		}
-		str_element(char c, bool is_realstr) : str_({c}), is_realstr_(is_realstr) {}
+		void reflesh(randval& r, uint32_t num, uint32_t cols)
+		{
+			row_ = r.get(num - 1);
+			col_ = r.get(cols - 1);
+		}
 	};
-	std::vector<str_element> str_set;
+	std::vector<fixstr_pos> fixstr_posset;
 
-	/* strs 格納 */
-	str_set.push_back({topstr, false});
-	str_set.push_back({'\n', false});
-	for (uint32_t n = 0; n < num; n++) {
-		for (uint32_t c = 0; c < cols; c++) {
-			str_set.push_back({q_strs[rand.get(strs.size() - 1)], true});
-			if ((delim == -1) || (c == cols - 1)) {
-				continue;
-			}
-			str_set.push_back({delim, false});
-		}
-		str_set.push_back({'\n', false});
-	}
-
-	/* fixstrs 配置 */
-	std::vector<uint32_t> usedidxs;
+	/* fixstr 場所決定 */
 	for (auto& fstr : fixstrs) {
-		uint32_t randidx = 0;
+		fixstr_pos fstr_pos(rand, num, cols, fstr);
 		while (1) {
-			try {
-				randidx = rand.get(1, num * cols);
-				for (auto usedidx : usedidxs) {
-					if (randidx == usedidx) {
-						throw -1;
-					}
+			/* 重複チェック */
+			bool is_redundant = false;
+			for (auto& old_fstr_pos : fixstr_posset) {
+				if ((fstr_pos.row_ == old_fstr_pos.row_) &&
+				    (fstr_pos.col_ == old_fstr_pos.col_)) {
+					is_redundant = true;
+					break;
 				}
-			} catch (...) {
+			}
+			if (is_redundant) {
+				fstr_pos.reflesh(rand, num, cols);
 				continue;
 			}
 			break;
 		}
-		usedidxs.push_back(randidx);
-
-		for (auto& element : str_set) {
-			if (!element.is_realstr_) {
-				continue;
-			}
-			randidx--;
-			if (randidx == 0) {
-				element.str_ = fstr;
-				break;
-			}
-		}
+		fixstr_posset.push_back(fstr_pos);
 	}
 
-	/* 成形 */
-	while (!str_set.empty()) {
-		std::string rawstr;
-		for (auto eitr = str_set.begin(); eitr != str_set.end();) {
-			rawstr += eitr->str_;
-			if (eitr->str_ == "\n") {
-				str_set.erase(eitr);
-				break;
+	/* strs 格納 */
+	strs_.push_back(topstr + '\n');
+	for (uint32_t n = 0; n < num; n++) {
+		std::string str;
+		for (uint32_t c = 0; c < cols; c++) {
+			bool flag_fixstr = false;
+			for (auto& fstr_pos : fixstr_posset) {
+				if ((fstr_pos.row_ == n) && (fstr_pos.col_ == c)) {
+					str += fstr_pos.c_;
+					flag_fixstr = true;
+					break;
+				}
 			}
-			eitr = str_set.erase(eitr);
+
+			if (flag_fixstr) {
+				continue;
+			}
+
+			if ((delim == -1) || (c == cols - 1)) {
+				str += q_strs[rand.get(strs.size() - 1)];
+			}
+			else {
+				str += q_strs[rand.get(strs.size() - 1)] + delim;
+			}
 		}
-		strs_.push_back(rawstr);
+		str += '\n';
+		strs_.push_back(str);
 	}
 }
 
