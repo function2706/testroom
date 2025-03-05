@@ -23,6 +23,7 @@
 #include "answerer/chaser.hh"
 #include "answerer/cookie.hh"
 #include "answerer/domino.hh"
+#include "answerer/domino2.hh"
 #include "answerer/donut.hh"
 #include "answerer/pyramid.hh"
 #include "answerer/squares.hh"
@@ -54,7 +55,7 @@ static struct anstable {
 	answerer* body;
 	~anstable() { delete body; }
 } anstbl[] = {new pyramid, new beacon, new chaser, new cookie, new symmetry,
-	      new squares, new battle, new donut,  new domino};
+	      new squares, new battle, new donut,  new domino, new domino2};
 
 static void print_list()
 {
